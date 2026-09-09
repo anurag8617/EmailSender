@@ -1,0 +1,55 @@
+import Link from "next/link";
+import { cookies } from "next/headers";
+import { Mail } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
+import { LogoutButton } from "@/components/logout-button";
+import { ThemeToggle } from "@/components/theme-toggle";
+
+const navLinks = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/leads", label: "Leads" },
+  { href: "/email-accounts", label: "Email Accounts" },
+  { href: "/campaigns", label: "Campaigns" },
+  { href: "/templates", label: "Templates" },
+  { href: "/settings", label: "Settings" },
+];
+
+export async function SiteNav() {
+  const isAuthed = Boolean((await cookies()).get("token"));
+
+  return (
+    <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
+        <Link href="/" className="flex items-center gap-2 font-semibold">
+          <Mail className="size-5" />
+          <span>Email Outreach Tool</span>
+        </Link>
+        <nav className="hidden items-center gap-1 md:flex">
+          {navLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
+            >
+              {link.label}
+            </Link>
+          ))}
+        </nav>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          {isAuthed ? (
+            <LogoutButton />
+          ) : (
+            <Link
+              href="/login"
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+            >
+              Log in
+            </Link>
+          )}
+        </div>
+      </div>
+    </header>
+  );
+}
