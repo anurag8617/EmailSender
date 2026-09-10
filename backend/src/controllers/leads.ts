@@ -1,5 +1,6 @@
 import { z } from "zod";
 import * as leadRepository from "../repositories/leads";
+import * as leadListRepository from "../repositories/leadLists";
 import { previewCsv, runImport, suggestMapping } from "../services/leads";
 import { asyncHandler } from "../utils/asyncHandler";
 
@@ -18,6 +19,8 @@ const leadSchema = z.object({
   phone: nullableString(100),
   custom_data: z.record(z.string(), z.unknown()).optional(),
   status: z.string().trim().min(1).max(20).optional(),
+  list_id: z.coerce.number().int().positive().optional(),
+  list_name: z.string().trim().min(1).max(255).optional(),
 });
 
 const leadUpdateSchema = leadSchema.partial();
@@ -56,9 +59,36 @@ export const createLead = asyncHandler(async (req, res) => {
     res.status(409).json({ message: "A lead with this email already exists" });
     return;
   }
-  const id = await leadRepository.create(input);
+
+  const { list_id, list_name, ...leadInput } = input;
+
+  let slotId: number | null = null;
+  let slotName: string | null = null;
+  if (list_id) {
+    const list = await leadListRepository.findById(list_id, req.user!.userId);
+    if (!list) {
+      res.status(400).json({ message: "Lead list not found or does not belong to you" });
+      return;
+    }
+    slotId = list.id;
+    slotName = list.name;
+  } else if (list_name) {
+    slotId = await leadListRepository.create(req.user!.userId, list_name);
+    slotName = list_name;
+  }
+
+  const id = await leadRepository.create(leadInput);
   const lead = await leadRepository.findById(id);
-  res.status(201).json({ data: lead });
+
+  if (slotId !== null) {
+    const added = await leadListRepository.addMembers(slotId, req.user!.userId, [id]);
+    if (added === -1) {
+      res.status(400).json({ message: "Lead list not found or does not belong to you" });
+      return;
+    }
+  }
+
+  res.status(201).json({ data: lead, slot: slotId !== null ? { id: slotId, name: slotName } : null });
 });
 
 export const updateLead = asyncHandler(async (req, res) => {
@@ -128,11 +158,26 @@ export const importLeads = asyncHandler(async (req, res) => {
     }
   }
 
+  let targetList: { id?: number; name?: string } | null = null;
+  const listIdRaw = req.body.list_id;
+  const listName = typeof req.body.list_name === "string" ? req.body.list_name.trim() : "";
+  if (listName) {
+    targetList = { name: listName };
+  } else if (listIdRaw !== undefined && listIdRaw !== null && listIdRaw !== "") {
+    const listId = Number(listIdRaw);
+    if (!Number.isInteger(listId) || listId <= 0) {
+      res.status(400).json({ message: "Invalid lead list id" });
+      return;
+    }
+    targetList = { id: listId };
+  }
+
   const summary = await runImport({
     buffer: req.file.buffer,
     mapping,
     userId: req.user!.userId,
     filename: req.file.originalname,
+    targetList,
   });
 
   res.json({ summary });

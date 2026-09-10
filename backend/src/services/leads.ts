@@ -1,5 +1,6 @@
 import { parse } from "csv-parse/sync";
 import * as leadRepository from "../repositories/leads";
+import * as leadListRepository from "../repositories/leadLists";
 import {
   FIELD_ALIASES,
   IMPORT_FIELDS,
@@ -73,11 +74,38 @@ export function previewCsv(buffer: Buffer, sampleSize = 5) {
   return { columns, sample, rowCount: rows.length };
 }
 
+export async function resolveSlot(
+  listRepository: typeof leadListRepository,
+  userId: number,
+  targetList: { id?: number; name?: string } | null
+): Promise<{ id: number; name: string } | null> {
+  if (!targetList) return null;
+  if (targetList.id) {
+    const list = await listRepository.findById(targetList.id, userId);
+    return list ? { id: list.id, name: list.name } : null;
+  }
+  if (targetList.name) {
+    const id = await listRepository.create(userId, targetList.name);
+    return { id, name: targetList.name };
+  }
+  return null;
+}
+
+export async function assignLeadsToSlot(
+  listRepository: typeof leadListRepository,
+  userId: number,
+  slot: { id: number; name: string },
+  leadIds: number[]
+): Promise<void> {
+  await listRepository.addMembers(slot.id, userId, leadIds);
+}
+
 export async function runImport(input: {
   buffer: Buffer;
   mapping: Record<string, string | null>;
   userId: number;
   filename: string;
+  targetList?: { id?: number; name?: string } | null;
 }): Promise<ImportSummary> {
   const rows = parseCsv(input.buffer);
   const totalRows = rows.length;
@@ -151,6 +179,24 @@ export async function runImport(input: {
     imported = await leadRepository.bulkCreate(toInsert);
   }
 
+  let slotId: number | null = null;
+  let slotName: string | null = null;
+
+  if (toInsert.length > 0) {
+    const slot = await resolveSlot(leadListRepository, input.userId, input.targetList ?? null);
+    if (slot) {
+      const byEmail = await leadRepository.findByEmails(toInsert.map((lead) => lead.email));
+      const leadIds = toInsert
+        .map((lead) => byEmail.get(lead.email))
+        .filter((id): id is number => id !== undefined);
+      if (leadIds.length > 0) {
+        await assignLeadsToSlot(leadListRepository, input.userId, slot, leadIds);
+        slotId = slot.id;
+        slotName = slot.name;
+      }
+    }
+  }
+
   const importId = await leadRepository.createImportHistory({
     userId: input.userId,
     filename: input.filename,
@@ -160,5 +206,5 @@ export async function runImport(input: {
     invalid,
   });
 
-  return { totalRows, imported, duplicates, invalid, importId };
+  return { totalRows, imported, duplicates, invalid, importId, slotId, slotName };
 }

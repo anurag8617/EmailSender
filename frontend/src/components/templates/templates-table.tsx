@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Eye, FileText, Pencil, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { apiFetch, type Template } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,7 +47,6 @@ export function TemplatesTable() {
   const [reload, setReload] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
   const [formKey, setFormKey] = useState(0);
@@ -72,12 +72,6 @@ export function TemplatesTable() {
     };
   }, [reload]);
 
-  useEffect(() => {
-    if (!notice) return;
-    const timer = setTimeout(() => setNotice(null), 4000);
-    return () => clearTimeout(timer);
-  }, [notice]);
-
   function openForm(template: Template | null) {
     setEditing(template);
     setFormKey((value) => value + 1);
@@ -93,7 +87,7 @@ export function TemplatesTable() {
     setDeleting(false);
     setDeleteTarget(null);
     if (ok) {
-      setNotice(`Deleted template "${deleteTarget.name}"`);
+      toast.success(`Deleted template "${deleteTarget.name}"`);
       setReload((value) => value + 1);
     } else {
       setError(error ?? "Failed to delete template");
@@ -212,8 +206,6 @@ export function TemplatesTable() {
         </CardContent>
       </Card>
 
-      {notice ? <p className="text-sm text-emerald-600">{notice}</p> : null}
-
       <TemplateFormDialog
         key={formKey}
         open={formOpen}
@@ -221,7 +213,9 @@ export function TemplatesTable() {
         template={editing}
         onSaved={(template) => {
           setReload((value) => value + 1);
-          setNotice(editing ? `Template updated: ${template.name}` : `Template created: ${template.name}`);
+          toast.success(
+            editing ? `Template updated: ${template.name}` : `Template created: ${template.name}`
+          );
         }}
       />
 

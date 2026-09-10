@@ -13,6 +13,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  LeadListPicker,
+  type LeadListPickerValue,
+} from "@/components/lead-lists/lead-list-picker";
 
 type AddLeadDialogProps = {
   open: boolean;
@@ -33,10 +37,12 @@ export function AddLeadDialog({ open, onOpenChange, onCreated }: AddLeadDialogPr
   const [form, setForm] = useState(initialForm);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [slot, setSlot] = useState<LeadListPickerValue>({ listId: null, newListName: null });
 
   function reset() {
     setForm(initialForm);
     setError(null);
+    setSlot({ listId: null, newListName: null });
   }
 
   function handleOpenChange(next: boolean) {
@@ -55,7 +61,11 @@ export function AddLeadDialog({ open, onOpenChange, onCreated }: AddLeadDialogPr
 
     const { ok, data, error } = await apiFetch<{ data: Lead }>("/api/leads", {
       method: "POST",
-      body: JSON.stringify(form),
+      body: JSON.stringify({
+        ...form,
+        list_id: slot.listId ?? undefined,
+        list_name: slot.newListName ?? undefined,
+      }),
     });
 
     setLoading(false);
@@ -121,6 +131,7 @@ export function AddLeadDialog({ open, onOpenChange, onCreated }: AddLeadDialogPr
               <Input id="phone" value={form.phone} onChange={(e) => set("phone", e.target.value)} />
             </div>
           </div>
+          <LeadListPicker onChange={setSlot} disabled={loading} />
           {error ? (
             <p role="alert" className="text-sm text-destructive">
               {error}

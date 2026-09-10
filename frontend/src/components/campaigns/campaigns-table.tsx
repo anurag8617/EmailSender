@@ -17,6 +17,7 @@ import {
   type CampaignDetail,
   type CampaignSummary,
 } from "@/lib/api";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,7 +62,6 @@ export function CampaignsTable() {
   const [reload, setReload] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
   const [formKey, setFormKey] = useState(0);
@@ -88,12 +88,6 @@ export function CampaignsTable() {
     };
   }, [reload]);
 
-  useEffect(() => {
-    if (!notice) return;
-    const timer = setTimeout(() => setNotice(null), 4000);
-    return () => clearTimeout(timer);
-  }, [notice]);
-
   async function runAction(campaign: CampaignSummary, action: string) {
     setBusyId(campaign.id);
     setError(null);
@@ -102,7 +96,7 @@ export function CampaignsTable() {
     });
     setBusyId(null);
     if (ok) {
-      setNotice(`Campaign "${campaign.name}" ${action === "cancel" ? "cancelled" : action + "d"}.`);
+      toast.success(`Campaign "${campaign.name}" ${action === "cancel" ? "cancelled" : action + "d"}.`);
       setReload((value) => value + 1);
     } else {
       setError(error ?? `Failed to ${action} campaign`);
@@ -138,7 +132,7 @@ export function CampaignsTable() {
     setDeleting(false);
     setDeleteTarget(null);
     if (ok) {
-      setNotice(`Deleted campaign "${deleteTarget.name}"`);
+      toast.success(`Deleted campaign "${deleteTarget.name}"`);
       setReload((value) => value + 1);
     } else {
       setError(error ?? "Failed to delete campaign");
@@ -349,8 +343,6 @@ export function CampaignsTable() {
         </CardContent>
       </Card>
 
-      {notice ? <p className="text-sm text-emerald-600">{notice}</p> : null}
-
       <CampaignFormDialog
         key={formKey}
         open={formOpen}
@@ -358,7 +350,9 @@ export function CampaignsTable() {
         campaign={editing}
         onSaved={(campaign) => {
           setReload((value) => value + 1);
-          setNotice(editing ? `Campaign updated: ${campaign.name}` : `Campaign created: ${campaign.name}`);
+          toast.success(
+            editing ? `Campaign updated: ${campaign.name}` : `Campaign created: ${campaign.name}`
+          );
         }}
       />
 

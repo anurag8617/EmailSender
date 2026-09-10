@@ -29,12 +29,31 @@ export type LeadList = {
   totalPages: number;
 };
 
+export type LeadGroup = {
+  id: number;
+  user_id: number;
+  name: string;
+  lead_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LeadGroupList = {
+  rows: LeadGroup[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
 export type ImportSummary = {
   totalRows: number;
   imported: number;
   duplicates: number;
   invalid: number;
   importId?: number;
+  slotId?: number | null;
+  slotName?: string | null;
 };
 
 export type ImportPreview = {

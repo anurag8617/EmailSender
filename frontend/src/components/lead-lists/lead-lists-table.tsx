@@ -1,14 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Search, Trash2, Plus, Upload } from "lucide-react";
+import { Search, Trash2, Plus, Users } from "lucide-react";
 import { toast } from "sonner";
-import {
-  apiFetch,
-  type ImportSummary,
-  type Lead,
-  type LeadList,
-} from "@/lib/api";
+import { apiFetch, type LeadGroup, type LeadGroupList } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -32,13 +27,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { AddLeadDialog } from "@/components/leads/add-lead-dialog";
-import { ImportDialog } from "@/components/leads/import-dialog";
+import { LeadListFormDialog } from "@/components/lead-lists/lead-list-form-dialog";
+import { LeadListMembersDialog } from "@/components/lead-lists/lead-list-members-dialog";
 
 const PAGE_SIZE = 10;
 
-export function LeadsTable() {
-  const [leads, setLeads] = useState<Lead[]>([]);
+export function LeadListsTable() {
+  const [lists, setLists] = useState<LeadGroup[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -47,9 +42,10 @@ export function LeadsTable() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [addOpen, setAddOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<Lead | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<LeadGroup | null>(null);
+  const [viewing, setViewing] = useState<LeadGroup | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<LeadGroup | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
@@ -57,16 +53,16 @@ export function LeadsTable() {
     const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
     if (search.trim()) params.set("search", search.trim());
 
-    apiFetch<LeadList>(`/api/leads?${params}`).then(({ ok, data, error }) => {
+    apiFetch<LeadGroupList>(`/api/lead-lists?${params}`).then(({ ok, data, error }) => {
       if (cancelled) return;
       setLoading(false);
       if (ok && data) {
-        setLeads(data.rows);
+        setLists(data.rows);
         setTotal(data.total);
         setTotalPages(data.totalPages);
         setError(null);
       } else {
-        setError(error ?? "Failed to load leads");
+        setError(error ?? "Failed to load lead lists");
       }
     });
 
@@ -83,18 +79,18 @@ export function LeadsTable() {
   async function handleDelete() {
     if (!deleteTarget) return;
     setDeleting(true);
-    const { ok, error } = await apiFetch(`/api/leads/${deleteTarget.id}`, { method: "DELETE" });
+    const { ok, error } = await apiFetch(`/api/lead-lists/${deleteTarget.id}`, { method: "DELETE" });
     setDeleting(false);
     setDeleteTarget(null);
     if (ok) {
-      toast.success(`Deleted ${deleteTarget.email}`);
-      if (leads.length === 1 && page > 1) {
+      toast.success(`Deleted “${deleteTarget.name}”`);
+      if (lists.length === 1 && page > 1) {
         setPage((p) => p - 1);
       } else {
         setReload((value) => value + 1);
       }
     } else {
-      setError(error ?? "Failed to delete lead");
+      setError(error ?? "Failed to delete lead list");
     }
   }
 
@@ -105,25 +101,27 @@ export function LeadsTable() {
     <>
       <Card>
         <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle className="text-base">Leads</CardTitle>
+          <CardTitle className="text-base">Lead lists</CardTitle>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative">
               <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="Search leads…"
+                placeholder="Search lists…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full pl-8 sm:w-64"
               />
             </div>
-            <Button type="button" variant="outline" onClick={() => setImportOpen(true)}>
-              <Upload />
-              Import CSV
-            </Button>
-            <Button type="button" onClick={() => setAddOpen(true)}>
+            <Button
+              type="button"
+              onClick={() => {
+                setEditing(null);
+                setFormOpen(true);
+              }}
+            >
               <Plus />
-              Add lead
+              Create list
             </Button>
           </div>
         </CardHeader>
@@ -139,46 +137,65 @@ export function LeadsTable() {
                 <Skeleton key={index} className="h-10 w-full" />
               ))}
             </div>
-          ) : leads.length === 0 ? (
+          ) : lists.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              {search ? "No leads match your search." : "No leads yet. Import a CSV or add a lead."}
+              {search
+                ? "No lead lists match your search."
+                : "No lead lists yet. Create one to group leads for a campaign."}
             </p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Leads</TableHead>
+                  <TableHead>Created</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {leads.map((lead) => (
-                  <TableRow key={lead.id}>
-                    <TableCell className="font-medium">
-                      {[lead.first_name, lead.last_name].filter(Boolean).join(" ") || "—"}
-                    </TableCell>
-                    <TableCell>{lead.company || "—"}</TableCell>
-                    <TableCell className="text-muted-foreground">{lead.email}</TableCell>
-                    <TableCell>{lead.phone || "—"}</TableCell>
+                {lists.map((list) => (
+                  <TableRow key={list.id}>
+                    <TableCell className="font-medium">{list.name}</TableCell>
                     <TableCell>
-                      <Badge variant={lead.status === "new" ? "secondary" : "outline"}>
-                        {lead.status}
-                      </Badge>
+                      <Badge variant="secondary">{list.lead_count}</Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {new Date(list.created_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`Delete ${lead.email}`}
-                        onClick={() => setDeleteTarget(lead)}
-                      >
-                        <Trash2 />
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`View leads in ${list.name}`}
+                          onClick={() => setViewing(list)}
+                        >
+                          <Users />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Edit ${list.name}`}
+                          onClick={() => {
+                            setEditing(list);
+                            setFormOpen(true);
+                          }}
+                        >
+                          <span className="text-sm">Edit</span>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Delete ${list.name}`}
+                          onClick={() => setDeleteTarget(list)}
+                        >
+                          <Trash2 />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -190,7 +207,7 @@ export function LeadsTable() {
 
       <div className="flex flex-col items-center justify-between gap-2 text-sm text-muted-foreground sm:flex-row">
         <span>
-          {total > 0 ? `Showing ${startIndex}–${endIndex} of ${total}` : "0 leads"}
+          {total > 0 ? `Showing ${startIndex}–${endIndex} of ${total}` : "0 lead lists"}
         </span>
         <div className="flex items-center gap-2">
           <Button
@@ -217,33 +234,32 @@ export function LeadsTable() {
         </div>
       </div>
 
-      <AddLeadDialog
-        open={addOpen}
-        onOpenChange={setAddOpen}
-        onCreated={(lead) => {
+      <LeadListFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        list={editing}
+        onSaved={(list) => {
           setReload((value) => value + 1);
-          toast.success(`Added ${lead.email}`);
+          toast.success(editing ? `Updated “${list.name}”` : `Created “${list.name}”`);
         }}
       />
 
-      <ImportDialog
-        open={importOpen}
-        onOpenChange={setImportOpen}
-        onImportComplete={(summary: ImportSummary) => {
+      <LeadListMembersDialog
+        list={viewing}
+        onOpenChange={(open) => !open && setViewing(null)}
+        onChanged={(list) => {
+          setViewing(list);
           setReload((value) => value + 1);
-          toast.success(
-            `Import complete: ${summary.imported} added, ${summary.duplicates} duplicates, ${summary.invalid} invalid`
-          );
         }}
       />
 
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete lead?</AlertDialogTitle>
+            <AlertDialogTitle>Delete lead list?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove <span className="font-medium">{deleteTarget?.email}</span> and
-              its campaign links.
+              This will permanently remove <span className="font-medium">{deleteTarget?.name}</span>. The
+              leads themselves are not deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

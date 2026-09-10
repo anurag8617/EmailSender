@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Ban, Plus, Search, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import {
   apiFetch,
   type Suppression,
@@ -39,7 +40,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { cn } from "@/lib/utils";
 
 const REASON_LABELS: Record<SuppressionReason, string> = {
   MANUALLY_BLOCKED: "Block list",
@@ -63,7 +63,6 @@ export function SuppressionsPanel() {
   const [reload, setReload] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [reasonFilter, setReasonFilter] = useState<string>("ALL");
@@ -101,12 +100,6 @@ export function SuppressionsPanel() {
     };
   }, [reload, page, search, reasonFilter]);
 
-  useEffect(() => {
-    if (!notice) return;
-    const timer = setTimeout(() => setNotice(null), 5000);
-    return () => clearTimeout(timer);
-  }, [notice]);
-
   async function handleAdd() {
     if (!email.trim()) return;
     setSubmitting(true);
@@ -121,9 +114,11 @@ export function SuppressionsPanel() {
       setPage(1);
       setSearch("");
       setReload((value) => value + 1);
-      setNotice(`Added ${reason === "MANUALLY_BLOCKED" ? "to the block list" : reason.toLowerCase()}: ${email.trim()}`);
+      toast.success(
+        `Added ${reason === "MANUALLY_BLOCKED" ? "to the block list" : reason.toLowerCase()}: ${email.trim()}`
+      );
     } else {
-      setError(res.error ?? "Failed to add address");
+      toast.error(res.error ?? "Failed to add address");
     }
   }
 
@@ -136,10 +131,10 @@ export function SuppressionsPanel() {
     setDeleting(false);
     setDeleteTarget(null);
     if (res.ok) {
-      setNotice(`Removed ${deleteTarget.email} from the suppression list`);
+      toast.success(`Removed ${deleteTarget.email} from the suppression list`);
       setReload((value) => value + 1);
     } else {
-      setError(res.error ?? "Failed to remove address");
+      toast.error(res.error ?? "Failed to remove address");
     }
   }
 
@@ -328,8 +323,8 @@ export function SuppressionsPanel() {
           )}
 
           <div className="flex items-center justify-between">
-            <p className={cn("text-sm text-muted-foreground", notice && "text-emerald-600")}>
-              {notice ?? `${total} suppressed ${total === 1 ? "address" : "addresses"}`}
+            <p className="text-sm text-muted-foreground">
+              {total} suppressed {total === 1 ? "address" : "addresses"}
             </p>
             <div className="flex items-center gap-2">
               <Button

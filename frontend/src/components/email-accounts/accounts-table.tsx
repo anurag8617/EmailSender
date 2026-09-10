@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PlugZap, Plus, Power, Pencil, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { apiFetch, type EmailAccount } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +33,6 @@ export function AccountsTable() {
   const [reload, setReload] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
   const [formKey, setFormKey] = useState(0);
@@ -58,12 +58,6 @@ export function AccountsTable() {
     };
   }, [reload]);
 
-  useEffect(() => {
-    if (!notice) return;
-    const timer = setTimeout(() => setNotice(null), 5000);
-    return () => clearTimeout(timer);
-  }, [notice]);
-
   async function handleTest(account: EmailAccount) {
     setTestingId(account.id);
     setError(null);
@@ -72,9 +66,9 @@ export function AccountsTable() {
     });
     setTestingId(null);
     if (ok) {
-      setNotice(`Connection test passed for ${account.email}`);
+      toast.success(`Connection test passed for ${account.email}`);
     } else {
-      setError(`${account.email}: ${error ?? "Connection test failed"}`);
+      toast.error(`${account.email}: ${error ?? "Connection test failed"}`);
       setReload((value) => value + 1);
     }
   }
@@ -86,7 +80,7 @@ export function AccountsTable() {
     });
     if (ok) {
       setReload((value) => value + 1);
-      setNotice(
+      toast.success(
         action === "disable" ? "Account paused — no emails will be sent." : "Account re-enabled."
       );
     } else {
@@ -103,7 +97,7 @@ export function AccountsTable() {
     setDeleting(false);
     setDeleteTarget(null);
     if (ok) {
-      setNotice(`Deleted ${deleteTarget.email}`);
+      toast.success(`Deleted ${deleteTarget.email}`);
       setReload((value) => value + 1);
     } else {
       setError(error ?? "Failed to delete account");
@@ -284,8 +278,6 @@ export function AccountsTable() {
         </CardContent>
       </Card>
 
-      {notice ? <p className="text-sm text-emerald-600">{notice}</p> : null}
-
       <AccountFormDialog
         key={formKey}
         open={formOpen}
@@ -293,7 +285,9 @@ export function AccountsTable() {
         account={editing}
         onSaved={(account) => {
           setReload((value) => value + 1);
-          setNotice(editing ? `Account updated: ${account.email}` : `Account added: ${account.email}`);
+          toast.success(
+            editing ? `Account updated: ${account.email}` : `Account added: ${account.email}`
+          );
         }}
       />
 

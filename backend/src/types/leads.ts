@@ -35,6 +35,8 @@ export interface ImportSummary {
   duplicates: number;
   invalid: number;
   importId?: number;
+  slotId?: number | null;
+  slotName?: string | null;
 }
 
 export interface PreviewRow {

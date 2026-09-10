@@ -21,6 +21,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  LeadListPicker,
+  type LeadListPickerValue,
+} from "@/components/lead-lists/lead-list-picker";
 
 const IMPORT_FIELDS: { key: string; label: string; required?: boolean }[] = [
   { key: "email", label: "Email", required: true },
@@ -47,6 +51,7 @@ export function ImportDialog({ open, onOpenChange, onImportComplete }: ImportDia
   const [summary, setSummary] = useState<ImportSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [slot, setSlot] = useState<LeadListPickerValue>({ listId: null, newListName: null });
 
   function reset() {
     setStep("pick");
@@ -55,6 +60,7 @@ export function ImportDialog({ open, onOpenChange, onImportComplete }: ImportDia
     setMapping({});
     setSummary(null);
     setError(null);
+    setSlot({ listId: null, newListName: null });
   }
 
   function handleOpenChange(next: boolean) {
@@ -84,9 +90,12 @@ export function ImportDialog({ open, onOpenChange, onImportComplete }: ImportDia
     if (!file || !preview) return;
     setError(null);
     setLoading(true);
-    const { ok, data, error } = await apiUpload<{ summary: ImportSummary }>("/api/leads/import", file, {
+    const fields: Record<string, string> = {
       mapping: JSON.stringify(mapping),
-    });
+    };
+    if (slot.listId) fields.list_id = String(slot.listId);
+    if (slot.newListName) fields.list_name = slot.newListName;
+    const { ok, data, error } = await apiUpload<{ summary: ImportSummary }>("/api/leads/import", file, fields);
     setLoading(false);
     if (ok && data) {
       setSummary(data.summary);
@@ -147,6 +156,7 @@ export function ImportDialog({ open, onOpenChange, onImportComplete }: ImportDia
               </span>
               <Badge variant="secondary">{file?.name}</Badge>
             </div>
+            <LeadListPicker onChange={setSlot} disabled={loading} />
             <div className="grid gap-3">
               {IMPORT_FIELDS.map((field) => (
                 <div key={field.key} className="grid grid-cols-[110px_1fr] items-center gap-3">
@@ -242,6 +252,12 @@ export function ImportDialog({ open, onOpenChange, onImportComplete }: ImportDia
                 <div className="text-xs text-muted-foreground">Invalid</div>
               </div>
             </div>
+            {summary.slotName ? (
+              <div className="rounded-lg border p-3 text-sm">
+                All imported leads added to slot{" "}
+                <span className="font-medium">{summary.slotName}</span>.
+              </div>
+            ) : null}
             <DialogFooter>
               <Button type="button" onClick={() => handleOpenChange(false)}>
                 Done

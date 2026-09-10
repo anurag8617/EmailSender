@@ -173,6 +173,7 @@ export async function update(id: number, input: Partial<LeadInput>): Promise<boo
 }
 
 export async function remove(id: number): Promise<boolean> {
+  await pool.query(`DELETE FROM lead_list_members WHERE lead_id = ?`, [id]);
   const [result] = await pool.query<ResultSetHeader>("DELETE FROM leads WHERE id = ?", [id]);
   return result.affectedRows > 0;
 }

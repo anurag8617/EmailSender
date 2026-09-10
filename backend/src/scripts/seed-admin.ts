@@ -8,9 +8,9 @@ const email = (process.env.ADMIN_EMAIL ?? "admin@example.com").trim().toLowerCas
 const password = process.env.ADMIN_PASSWORD ?? "ChangeMe!123";
 
 async function seed() {
-  if (!email.includes("@") || password.length < 8) {
+  if (password.length < 8) {
     throw new Error(
-      "Invalid admin defaults. Provide valid ADMIN_EMAIL and a password of at least 8 characters."
+      "Invalid admin defaults. Provide a password of at least 8 characters."
     );
   }
 
