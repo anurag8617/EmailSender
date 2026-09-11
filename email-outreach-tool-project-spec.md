@@ -1,4 +1,4 @@
-Email Outreach Tool — Project Specification
+MaleSender — Project Specification
 
 1. Project Overview
 

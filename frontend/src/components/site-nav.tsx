@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { Mail } from "lucide-react";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import { LogoutButton } from "@/components/logout-button";
@@ -23,8 +23,8 @@ export async function SiteNav() {
     <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
         <Link href="/" className="flex items-center gap-2 font-semibold">
-          <Mail className="size-5" />
-          <span>Email Outreach Tool</span>
+          <Image src="/logo.png" alt="MaleSender" width={1345} height={1170} className="h-7 w-auto" priority />
+          <span>MaleSender</span>
         </Link>
         <nav className="hidden items-center gap-1 md:flex">
           {navLinks.map((link) => (

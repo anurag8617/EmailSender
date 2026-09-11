@@ -15,10 +15,13 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Email Outreach Tool",
-    template: "%s | Email Outreach Tool",
+    default: "MaleSender",
+    template: "%s | MaleSender",
   },
   description: "Self-hosted email outreach management tool",
+  icons: {
+    icon: "/logo.png",
+  },
 };
 
 // Applied before first paint to avoid a dark-mode flash of unstyled content.
@@ -29,7 +32,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full font-[sans-serif] antialiased`}
     >
       <head>
         <script

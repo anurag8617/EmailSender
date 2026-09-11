@@ -15,7 +15,7 @@ export default function LoginPage() {
         <CardHeader>
           <CardTitle>Log in</CardTitle>
           <CardDescription>
-            Access your email outreach dashboard.
+            Access your MaleSender dashboard.
           </CardDescription>
         </CardHeader>
         <CardContent>

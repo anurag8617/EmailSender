@@ -1,4 +1,4 @@
--- Email Outreach Tool — MySQL Schema
+-- MaleSender — MySQL Schema
 -- MySQL 5.7+ / MariaDB 10.4+
 -- Charset: utf8mb4
 
