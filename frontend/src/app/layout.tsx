@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "MaleSender",
-    template: "%s | MaleSender",
+    default: "MailSender",
+    template: "%s | MailSender",
   },
   description: "Self-hosted email outreach management tool",
   icons: {

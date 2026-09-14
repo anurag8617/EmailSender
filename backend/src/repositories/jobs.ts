@@ -282,6 +282,18 @@ export async function jobCountForCampaign(campaignId: number): Promise<number> {
   return Number(rows[0]?.count ?? 0);
 }
 
+export async function backfillCancelled(campaignId: number, reason: string): Promise<number> {
+  const [result] = await pool.query<ResultSetHeader>(
+    `INSERT INTO email_jobs (campaign_id, lead_id, email_account_id, template_id, scheduled_at, status, error_message)
+     SELECT cl.campaign_id, cl.lead_id, NULL, NULL, NULL, 'CANCELLED', ?
+       FROM campaign_leads cl
+       LEFT JOIN email_jobs ej ON ej.campaign_id = cl.campaign_id AND ej.lead_id = cl.lead_id
+      WHERE cl.campaign_id = ? AND ej.id IS NULL`,
+    [reason, campaignId]
+  );
+  return result.affectedRows;
+}
+
 export async function recordUnsubscribe(campaignId: number, email: string): Promise<void> {
   await pool.query<ResultSetHeader>(
     `UPDATE email_jobs ej

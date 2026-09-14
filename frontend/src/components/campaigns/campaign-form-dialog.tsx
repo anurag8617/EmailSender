@@ -6,10 +6,8 @@ import {
   apiFetch,
   type CampaignDetail,
   type EmailAccount,
-  type Lead,
   type LeadGroup,
   type LeadGroupList,
-  type LeadList,
   type Template,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -40,9 +38,6 @@ type CampaignFormDialogProps = {
   onSaved: (campaign: CampaignDetail) => void;
 };
 
-const LEADS_PAGE_SIZE = 100;
-const LEAD_PAGES = 10;
-
 function toInputValue(value: string | null): string {
   if (!value) return "";
   return `${value.replace(" ", "T")}`.slice(0, 16);
@@ -62,23 +57,20 @@ export function CampaignFormDialog({
   const [templateId, setTemplateId] = useState<string>(
     campaign?.template_id ? String(campaign.template_id) : ""
   );
-  const [leadIds, setLeadIds] = useState<Set<number>>(
-    () => new Set(campaign?.leads.map((lead) => lead.id) ?? [])
-  );
+  const [selectedLeadListId, setSelectedLeadListId] = useState<number | null>(null);
   const [accountIds, setAccountIds] = useState<Set<number>>(
     () => new Set(campaign?.accounts.map((account) => account.id) ?? [])
   );
 
-  const [leads, setLeads] = useState<Lead[]>([]);
   const [accounts, setAccounts] = useState<EmailAccount[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [leadLists, setLeadLists] = useState<LeadGroup[]>([]);
   const [leadListValue, setLeadListValue] = useState("");
-  const [leadListLoading, setLeadListLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<Pick<LeadGroup, "id" | "name" | "lead_count"> | null>(
-    null
+    campaign
+      ? { id: 0, name: "Current campaign recipients", lead_count: campaign.leads.length }
+      : null
   );
-  const [leadSearch, setLeadSearch] = useState("");
   const [optionsLoading, setOptionsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -87,28 +79,13 @@ export function CampaignFormDialog({
     if (!open) return;
     let cancelled = false;
 
-    async function loadOptions() {
-      const leadPages: Lead[] = [];
-      for (let page = 1; page <= LEAD_PAGES; page++) {
-        const { ok, data } = await apiFetch<{ rows: Lead[]; total: number }>(
-          `/api/leads?page=${page}&pageSize=${LEADS_PAGE_SIZE}`
-        );
-        if (!ok || !data) break;
-        leadPages.push(...data.rows);
-        if (data.rows.length < LEADS_PAGE_SIZE) break;
-      }
-      return leadPages;
-    }
-
     Promise.all([
-      loadOptions(),
       apiFetch<{ data: EmailAccount[] }>("/api/email-accounts"),
       apiFetch<{ data: Template[] }>("/api/templates"),
       apiFetch<LeadGroupList>("/api/lead-lists?page=1&pageSize=100"),
-    ]).then(([leadRows, accountsResult, templatesResult, listsResult]) => {
+    ]).then(([accountsResult, templatesResult, listsResult]) => {
         if (cancelled) return;
         setOptionsLoading(false);
-        setLeads(leadRows);
         if (accountsResult.ok && accountsResult.data) {
           setAccounts(accountsResult.data.data);
         }
@@ -126,43 +103,6 @@ export function CampaignFormDialog({
     };
   }, [open]);
 
-  const filteredLeads = leadSearch.trim()
-    ? leads.filter((lead) => {
-        const term = leadSearch.trim().toLowerCase();
-        return (
-          lead.email.toLowerCase().includes(term) ||
-          lead.first_name?.toLowerCase().includes(term) ||
-          lead.last_name?.toLowerCase().includes(term) ||
-          lead.company?.toLowerCase().includes(term)
-        );
-      })
-    : leads;
-
-  const visibleFiltered = filteredLeads.map((lead) => lead.id).length;
-  const selectedVisible = filteredLeads.filter((lead) => leadIds.has(lead.id)).length;
-  const allVisibleSelected = visibleFiltered > 0 && selectedVisible === visibleFiltered;
-
-  function toggleLead(id: number) {
-    setLeadIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function toggleAllLeads() {
-    setLeadIds((prev) => {
-      const next = new Set(prev);
-      if (allVisibleSelected) {
-        for (const lead of filteredLeads) next.delete(lead.id);
-      } else {
-        for (const lead of filteredLeads) next.add(lead.id);
-      }
-      return next;
-    });
-  }
-
   function toggleAccount(id: number) {
     setAccountIds((prev) => {
       const next = new Set(prev);
@@ -172,41 +112,29 @@ export function CampaignFormDialog({
     });
   }
 
-  async function handleSelectLeadList(value: string | null) {
-    setLeadListValue(value ?? "");
-    if (!value) return;
-    setLeadListLoading(true);
-    setError(null);
-
-    const picked: Lead[] = [];
-    for (let page = 1; page <= LEAD_PAGES; page++) {
-      const { ok, data } = await apiFetch<LeadList>(
-        `/api/lead-lists/${value}/members?page=${page}&pageSize=${LEADS_PAGE_SIZE}`
-      );
-      if (!ok || !data) break;
-      picked.push(...data.rows);
-      if (data.rows.length < LEADS_PAGE_SIZE) break;
-    }
-
-    const list = leadLists.find((item) => item.id === Number(value));
+  function handleSelectLeadList(value: string | null) {
+    const id = value ? Number(value) : null;
+    const list = leadLists.find((item) => item.id === id) ?? null;
+    setSelectedLeadListId(id);
+    setLeadListValue("");
     setSelectedSlot(
       list
         ? { id: list.id, name: list.name, lead_count: list.lead_count }
-        : { id: Number(value), name: `List #${value}`, lead_count: picked.length }
+        : null
     );
-    setLeadIds(new Set(picked.map((lead) => lead.id)));
-    setLeadListValue("");
-    setLeadListLoading(false);
-    toast.success(`Slot ${list?.name ?? `#${value}`} loaded — ${picked.length} leads`);
+    if (list) {
+      toast.success(`Lead list "${list.name}" selected — ${list.lead_count} recipients`);
+    }
   }
 
   function handleClearSlot() {
+    setSelectedLeadListId(null);
     setSelectedSlot(null);
     setLeadListValue("");
-    setLeadIds(new Set());
   }
 
   function handleChangeSlot() {
+    setSelectedLeadListId(null);
     setSelectedSlot(null);
     setLeadListValue("");
   }
@@ -220,18 +148,25 @@ export function CampaignFormDialog({
       return;
     }
 
+    if (!selectedLeadListId && !campaign) {
+      setError("Select a lead list before saving the campaign");
+      return;
+    }
+
     setLoading(true);
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       name,
       start_at: startAt || null,
       end_at: endAt || null,
       daily_limit: Number(dailyLimit),
       hourly_limit: Number(hourlyLimit),
       template_id: Number(templateId),
-      lead_ids: [...leadIds],
       account_ids: [...accountIds],
     };
+    if (selectedLeadListId !== null) {
+      payload.lead_list_id = selectedLeadListId;
+    }
 
     const result = campaign
       ? await apiFetch<{ data: CampaignDetail }>(`/api/campaigns/${campaign.id}`, {
@@ -258,7 +193,7 @@ export function CampaignFormDialog({
         <DialogHeader>
           <DialogTitle>{campaign ? "Edit campaign" : "Create campaign"}</DialogTitle>
           <DialogDescription>
-            Pick leads and authorized sender accounts, then set a schedule and sending limits.
+            Pick a lead list and authorized sender accounts, then set a schedule and sending limits.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-4">
@@ -295,18 +230,18 @@ export function CampaignFormDialog({
                   <Button type="button" variant="outline" size="sm" onClick={handleChangeSlot}>
                     Change
                   </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={handleClearSlot}>
-                    Clear
-                  </Button>
+                  {selectedLeadListId !== null ? (
+                    <Button type="button" variant="outline" size="sm" onClick={handleClearSlot}>
+                      Clear
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             ) : (
               <div className="grid gap-1">
                 <Select value={leadListValue} onValueChange={handleSelectLeadList}>
                   <SelectTrigger id="campaign-lead-list" className="w-full">
-                    <SelectValue
-                      placeholder={leadListLoading ? "Loading leads…" : "Choose a lead list"}
-                    />
+                    <SelectValue placeholder="Choose a lead list" />
                   </SelectTrigger>
                   <SelectContent>
                     {leadLists.length === 0 ? (
@@ -323,7 +258,7 @@ export function CampaignFormDialog({
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Picking a slot makes all of its leads the campaign recipients.
+                  All leads in the chosen list become the campaign recipients.
                 </p>
               </div>
             )}
@@ -406,69 +341,6 @@ export function CampaignFormDialog({
                 onChange={(e) => setHourlyLimit(e.target.value)}
               />
             </div>
-          </div>
-
-          <div className="grid gap-2">
-            <div className="flex items-center justify-between">
-              <Label>Fine-tune leads</Label>
-              <div className="flex items-center gap-2">
-                {leadIds.size > 0 ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-2 text-xs"
-                    onClick={() => setLeadIds(new Set())}
-                  >
-                    Clear selection
-                  </Button>
-                ) : null}
-                <Badge variant="secondary">{leadIds.size} selected</Badge>
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              The lead list above sets the campaign recipients. Add or remove individual leads here.
-            </p>
-            <Input
-              type="search"
-              placeholder="Filter leads…"
-              value={leadSearch}
-              onChange={(e) => setLeadSearch(e.target.value)}
-            />
-            <div className="max-h-48 overflow-y-auto rounded-lg border p-2">
-              {optionsLoading ? (
-                <p className="p-2 text-sm text-muted-foreground">Loading leads…</p>
-              ) : filteredLeads.length === 0 ? (
-                <p className="p-2 text-sm text-muted-foreground">No leads found.</p>
-              ) : (
-                <div className="grid gap-1">
-                  <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-accent">
-                    <Checkbox checked={allVisibleSelected} onCheckedChange={toggleAllLeads} />
-                    Select all ({visibleFiltered})
-                  </label>
-                  {filteredLeads.map((lead) => (
-                    <label
-                      key={lead.id}
-                      className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-accent"
-                    >
-                      <Checkbox
-                        checked={leadIds.has(lead.id)}
-                        onCheckedChange={() => toggleLead(lead.id)}
-                      />
-                      <span className="truncate">
-                        {[lead.first_name, lead.last_name].filter(Boolean).join(" ") || "—"}
-                      </span>
-                      <span className="ml-auto truncate text-xs text-muted-foreground">
-                        {lead.email}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-            {leadIds.size > 0 ? (
-              <p className="text-xs text-muted-foreground">Exactly {leadIds.size} leads will be sent to.</p>
-            ) : null}
           </div>
 
           <div className="grid gap-2">

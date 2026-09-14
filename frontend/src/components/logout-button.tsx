@@ -5,7 +5,7 @@ import { LogOut } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
-export function LogoutButton() {
+export function LogoutButton({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
 
   async function handleLogout() {
@@ -15,9 +15,15 @@ export function LogoutButton() {
   }
 
   return (
-    <Button type="button" variant="outline" size="sm" onClick={handleLogout}>
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      onClick={handleLogout}
+      className={compact ? "justify-center md:w-full md:justify-start" : ""}
+    >
       <LogOut />
-      Log out
+      <span className={compact ? "hidden md:inline" : undefined}>Log out</span>
     </Button>
   );
 }

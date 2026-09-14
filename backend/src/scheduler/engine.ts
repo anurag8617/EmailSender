@@ -298,17 +298,23 @@ async function finalizeCampaigns(): Promise<void> {
   const campaigns = await campaignRepo.activeCampaigns();
   for (const campaign of campaigns) {
     const ended = campaign.end_at && Date.now() > new Date(campaign.end_at).getTime();
-    if (ended) {
-      await jobRepo.canceledPending(campaign.id);
-      await campaignRepo.setCampaignStatus(campaign.id, "COMPLETED");
-      continue;
-    }
 
     const [unfinished, leadCount, jobCount] = await Promise.all([
       jobRepo.unfinishedJobCount(campaign.id),
       campaignRepo.campaignLeadCount(campaign.id),
       jobRepo.jobCountForCampaign(campaign.id),
     ]);
+
+    if (ended) {
+      await jobRepo.backfillCancelled(
+        campaign.id,
+        "campaign sending window ended before this lead was scheduled"
+      );
+      await jobRepo.canceledPending(campaign.id);
+      await campaignRepo.setCampaignStatus(campaign.id, "COMPLETED");
+      continue;
+    }
+
     if (unfinished === 0 && leadCount > 0 && jobCount >= leadCount) {
       await campaignRepo.setCampaignStatus(campaign.id, "COMPLETED");
     }

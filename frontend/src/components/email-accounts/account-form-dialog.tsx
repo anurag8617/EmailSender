@@ -21,6 +21,38 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+type ProviderPreset = {
+  label: string;
+  host: string;
+  port: string;
+  secure: string;
+  hint: string;
+};
+
+const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
+  gmail: {
+    label: "Gmail",
+    host: "smtp.gmail.com",
+    port: "587",
+    secure: "false",
+    hint: "Enable 2-Step Verification on your Google account, then generate an App Password at myaccount.google.com/apppasswords.",
+  },
+  outlook: {
+    label: "Outlook / Microsoft 365",
+    host: "smtp-mail.outlook.com",
+    port: "587",
+    secure: "false",
+    hint: "Use your Microsoft account email and an app password, or your regular password if legacy auth is allowed.",
+  },
+  custom: {
+    label: "Custom SMTP",
+    host: "",
+    port: "587",
+    secure: "true",
+    hint: "",
+  },
+};
+
 type AccountFormDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -32,7 +64,7 @@ const emptyForm: AccountFormValues = {
   email: "",
   host: "",
   port: "587",
-  secure: "true",
+  secure: "false",
   username: "",
   password: "",
   daily_limit: "50",
@@ -54,8 +86,33 @@ export function AccountFormDialog({ open, onOpenChange, account, onSaved }: Acco
         }
       : emptyForm
   );
+  const [provider, setProvider] = useState<string>(() =>
+    account
+      ? account.server.host === "smtp.gmail.com"
+        ? "gmail"
+        : account.server.host === "smtp-mail.outlook.com"
+        ? "outlook"
+        : "custom"
+      : typeof window !== "undefined"
+      ? (localStorage.getItem("email-account-provider") ?? "gmail")
+      : "gmail"
+  );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const preset = PROVIDER_PRESETS[provider] ?? PROVIDER_PRESETS.custom;
+
+  function selectProvider(key: string) {
+    setProvider(key);
+    const preset = PROVIDER_PRESETS[key] ?? PROVIDER_PRESETS.custom;
+    localStorage.setItem("email-account-provider", key);
+    set("host", preset.host);
+    set("port", preset.port);
+    set("secure", preset.secure);
+    if (key === "gmail" || key === "outlook") {
+      set("username", form.email);
+    }
+  }
 
   function set(key: keyof AccountFormValues, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -130,9 +187,29 @@ export function AccountFormDialog({ open, onOpenChange, account, onSaved }: Acco
               type="email"
               required
               value={form.email}
-              onChange={(e) => set("email", e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                set("email", value);
+                if (provider === "gmail" || provider === "outlook") {
+                  set("username", value);
+                }
+              }}
               placeholder="sender@yourdomain.com"
             />
+
+          <div className="grid gap-2">
+            <Label htmlFor="account-provider">Provider preset</Label>
+            <Select value={provider} onValueChange={(value) => selectProvider(value ?? "custom")}>
+              <SelectTrigger id="account-provider" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="gmail">Gmail</SelectItem>
+                <SelectItem value="outlook">Outlook / Microsoft 365</SelectItem>
+                <SelectItem value="custom">Custom SMTP</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -208,6 +285,11 @@ export function AccountFormDialog({ open, onOpenChange, account, onSaved }: Acco
               onChange={(e) => set("password", e.target.value)}
               placeholder={account ? "Leave blank to keep current password" : "••••••••"}
             />
+            {preset.hint ? (
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {preset.hint}
+              </p>
+            ) : null}
           </div>
 
           <div className="grid grid-cols-2 gap-4">

@@ -1,4 +1,4 @@
-MaleSender — Project Specification
+MailSender — Project Specification
 
 1. Project Overview
 

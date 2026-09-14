@@ -23,7 +23,7 @@ app.use(cookieParser());
 app.use(apiRoutes);
 
 app.use("/", (_req, res) => {
-  res.json({ name: "MaleSender API", status: "running" });
+  res.json({ name: "MailSender API", status: "running" });
 });
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {

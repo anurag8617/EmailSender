@@ -1,6 +1,7 @@
 import { z } from "zod";
 import * as campaignRepository from "../repositories/campaigns";
 import * as templateRepository from "../repositories/templates";
+import * as leadListRepository from "../repositories/leadLists";
 import {
   Campaign,
   CampaignCounts,
@@ -39,6 +40,7 @@ const campaignSchema = z.object({
   hourly_limit: z.coerce.number().int().min(1).max(1000).optional(),
   template_id: z.coerce.number().int().positive().nullable().optional(),
   lead_ids: z.array(z.coerce.number().int().positive()).optional(),
+  lead_list_id: z.coerce.number().int().positive().optional(),
   account_ids: z.array(z.coerce.number().int().positive()).optional(),
 });
 
@@ -99,6 +101,18 @@ async function validateTemplate(userId: number, templateId: number): Promise<num
     throw new AppError("Selected email template does not exist", 400);
   }
   return template.id;
+}
+
+async function validateLeadList(userId: number, leadListId: number): Promise<number[]> {
+  const list = await leadListRepository.findById(leadListId, userId);
+  if (!list) {
+    throw new AppError("Selected lead list does not exist", 400);
+  }
+  const leadIds = await leadListRepository.leadIdsOfList(leadListId);
+  if (leadIds.length === 0) {
+    throw new AppError("Selected lead list is empty", 400);
+  }
+  return leadIds;
 }
 
 async function transitionCampaign(
@@ -176,7 +190,9 @@ export const createCampaign = asyncHandler(async (req, res) => {
   const userId = req.user!.userId;
 
   const accountIds = await validateAccounts(userId, input.account_ids ?? []);
-  const leadIds = await validateLeads(input.lead_ids ?? []);
+  const leadIds = input.lead_list_id
+    ? await validateLeadList(userId, input.lead_list_id)
+    : await validateLeads(input.lead_ids ?? []);
   const templateId = input.template_id
     ? await validateTemplate(userId, input.template_id)
     : null;
@@ -213,7 +229,10 @@ export const updateCampaign = asyncHandler(async (req, res) => {
 
   await campaignRepository.update(id, userId, input);
 
-  if (input.lead_ids) {
+  if (input.lead_list_id) {
+    const leadListIds = await validateLeadList(userId, input.lead_list_id);
+    await campaignRepository.replaceLeads(id, leadListIds);
+  } else if (input.lead_ids) {
     const leadIds = await validateLeads(input.lead_ids);
     await campaignRepository.replaceLeads(id, leadIds);
   }

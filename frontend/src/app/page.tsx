@@ -26,7 +26,7 @@ import { HowItWorks } from "@/components/how-it-works";
 import { cn } from "@/lib/utils";
 
 export const metadata = {
-  title: "MaleSender",
+  title: "MailSender",
   description:
     "Self-hosted email outreach tool — import leads, add sender accounts, and run automated cold-email campaigns from your own infrastructure.",
 };
@@ -79,110 +79,137 @@ export default async function LandingPage() {
 
       <main className="flex-1">
        {/* --- HERO SECTION --- */}
-        <section className="relative min-h-[calc(100vh-3.5rem)] overflow-hidden bg-background px-4 py-6 sm:px-6 lg:px-8">
-          <div className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-[1500px] flex-col justify-between">
+       <section className="relative min-h-[calc(100vh-3.5rem)] overflow-hidden bg-background pt-4 py-6 pb-0 sm:px-6 lg:px-8">
+  <div className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-[1500px] flex-col justify-between">
 
-            {/* TOP EDITORIAL HEADER */}
-            <header className="flex items-center justify-between py-2">
-              <Link href="/" className="flex items-center gap-2.5 font-semibold transition-opacity hover:opacity-80">
-                <Image
-                  src="/logo.png"
-                  alt="MaleSender Logo"
-                  width={1345}
-                  height={1170}
-                  className="h-7 w-auto object-contain"
-                  priority
-                />
-                <span className="text-base font-bold tracking-tight">MaleSender</span>
-              </Link>
+    {/* TOP EDITORIAL HEADER */}
+    <header className="flex items-center justify-between py-2">
+      <Link href="/" className="flex items-center gap-2.5 font-semibold transition-opacity hover:opacity-80">
+        <Image
+          src="/logo.png"
+          alt="MailSender Logo"
+          width={1345}
+          height={1170}
+          className="h-7 w-auto object-contain"
+          priority
+        />
+        <span className="text-base font-bold tracking-tight">MailSender</span>
+      </Link>
 
-              <div className="flex items-center gap-3">
-                <ThemeToggle />
-                <Link
-                  href="/login"
-                  className={cn(buttonVariants({ variant: "outline", size: "sm" }), "rounded-full px-5 text-xs font-medium")}
-                >
-                  Log in
-                </Link>
-              </div>
-            </header>
+      <div className="flex items-center gap-3">
+        <ThemeToggle />
+        <Link
+          href="/login"
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "rounded-full px-5 text-xs font-medium")}
+        >
+          Log in
+        </Link>
+      </div>
+    </header>
 
-            {/* MAIN HERO SECTION */}
-            <div className="relative flex flex-1 items-center justify-center py-8">
+    {/* MAIN HERO SECTION */}
+    <div className="relative flex flex-1 items-center justify-center py-8">
 
-              {/* LEFT SMALL CARD */}
-              <div className="absolute left-0 top-[18%]  ">
-                <div className="left-0 bottom-[18%] hidden max-w-[190px] lg:block">
-                <p className="border-l-2 border-primary/40 pl-3 text-[9px] font-semibold uppercase leading-relaxed tracking-wider text-muted-foreground">
-                  Presentations are communication tools that can be used as demonstrations.
-                </p>
-              </div>
-              </div>
-
-              {/* RIGHT SMALL CARD */}
-              <div className="absolute right-0 top-[18%]  ">
-                <div className=" right-0 bottom-[18%] hidden max-w-[190px] lg:block text-right">
-                <p className="border-r-2 border-primary/40 pr-3 text-[9px] font-semibold uppercase leading-relaxed tracking-wider text-muted-foreground">
-                  Import leads, connect senders, create campaigns and start sending.
-                </p>
-              </div>
-              </div>
-
-              
-
-              {/* CENTER HERO IMAGE (z-10) */}
-              <div className="absolute bottom-0 left-1/2 z-10 w-[250px] -translate-x-1/2 sm:w-[320px] md:w-[380px] lg:w-[440px]">
-                <Image
-                  src="/hero.png"
-                  alt="MaleSender Hero"
-                  width={1024}
-                  height={1536}
-                  priority
-                  className="h-auto w-full object-contain drop-shadow-xl"
-                />
-              </div>
-
-              {/* GIANT FOREGROUND TEXT (z-20 - Overlays on top of Hero Image) */}
-              <div className="absolute bottom-[3%] left-1/2 z-20 w-full -translate-x-1/2 overflow-visible text-center pointer-events-none">
-                <h1 className="whitespace-nowrap  font-black uppercase leading-[0.72] tracking-[-0.075em] text-foreground text-[20vw] 
-                sm:text-[19vw] md:text-[17vw] lg:text-[13vw]">
-                  MALESENDER
-                </h1>
-              </div>
-
-              
-            </div>
-
-            {/* MOBILE DESCRIPTION FOOTER */}
-            <div className="grid grid-cols-2 gap-6 border-t border-border/40 pt-4 pb-2 md:hidden">
-              <div>
-                <p className="text-[8px] font-semibold uppercase leading-relaxed text-muted-foreground">
-                  Simple email outreach without complicated workflows.
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-[8px] font-semibold uppercase leading-relaxed text-muted-foreground">
-                  Your email accounts. Your data. Your infrastructure.
-                </p>
-              </div>
-            </div>
-
+      {/* LEFT SMALL CARD */}
+      <div className="absolute left-0 top-[12%] hidden w-[140px] md:block lg:w-[170px]">
+        <div className="overflow-hidden rounded-lg border border-border/60 bg-card/40 p-2 shadow-sm backdrop-blur-sm">
+          <div className="aspect-square overflow-hidden rounded bg-muted">
+            <Image
+              src="/heroimg.png"
+              alt="Outreach preview"
+              width={400}
+              height={400}
+              className="h-full w-full object-cover object-top grayscale transition-all duration-300 hover:grayscale-0"
+            />
           </div>
-        </section>
+          <p className="mt-2.5 text-[8px] font-medium uppercase leading-relaxed tracking-wider text-muted-foreground">
+            Simple tools for modern email outreach and professional communication.
+          </p>
+        </div>
+      </div>
+
+      {/* RIGHT SMALL CARD */}
+      <div className="absolute right-0 top-[18%] hidden w-[140px] md:block lg:w-[170px]">
+        <div className="overflow-hidden rounded-lg border border-border/60 bg-card/40 p-2 shadow-sm backdrop-blur-sm">
+          <div className="aspect-square overflow-hidden rounded bg-muted">
+            <Image
+              src="/heroimg.png"
+              alt="Infrastructure preview"
+              width={300}
+              height={300}
+              className="h-full w-full object-cover object-top grayscale transition-all duration-300 hover:grayscale-0"
+            />
+          </div>
+          <p className="mt-2.5 text-[8px] font-medium uppercase leading-relaxed tracking-wider text-muted-foreground">
+            Your email accounts. Your data. Your infrastructure.
+          </p>
+        </div>
+      </div>
+
+      {/* LEFT EDITORIAL DESCRIPTION - DESKTOP */}
+      <div className="absolute left-0 bottom-[28%] hidden max-w-[190px] lg:block">
+        <p className="border-l-2 border-primary/40 pl-3 text-[9px] font-semibold uppercase leading-relaxed tracking-wider text-muted-foreground">
+          Presentations are communication tools that can be used as demonstrations.
+        </p>
+      </div>
+
+      {/* RIGHT EDITORIAL DESCRIPTION - DESKTOP */}
+      <div className="absolute right-0 bottom-[28%] hidden max-w-[190px] lg:block text-right">
+        <p className="border-r-2 border-primary/40 pr-3 text-[9px] font-semibold uppercase leading-relaxed tracking-wider text-muted-foreground">
+          Import leads, connect senders, create campaigns and start sending.
+        </p>
+      </div>
+
+      {/* CENTER HERO IMAGE (z-10) */}
+      <div className="absolute bottom-0 left-1/2 z-10 w-[250px] -translate-x-1/2 sm:w-[320px] md:w-[380px] lg:w-[440px]">
+        <Image
+          src="/heroimg.png"
+          alt="MailSender Hero"
+          width={400}
+          height={400}
+          priority
+          className="h-auto  object-contain drop-shadow-xl transition-all duration-300 hover:scale-[1.02]"
+        />
+      </div>
+
+      {/* GIANT FOREGROUND TEXT (z-20 - Overlays on top of Hero Image) */}
+      <div className="absolute bottom-[3%] left-1/2 z-20 w-full -translate-x-1/2 overflow-visible text-center pointer-events-none">
+        <h1 className="whitespace-nowrap font-black uppercase leading-[0.72] tracking-[-0.075em] text-foreground text-[20vw] sm:text-[19vw] md:text-[17vw] lg:text-[13vw]">
+          MAILSENDER
+        </h1>
+      </div>
+
+    </div>
+
+    {/* MOBILE DESCRIPTION FOOTER */}
+    <div className="grid grid-cols-2 gap-6 border-t border-border/40 pt-4 pb-2 md:hidden">
+      <div>
+        <p className="text-[8px] font-semibold uppercase leading-relaxed text-muted-foreground">
+          Simple email outreach without complicated workflows.
+        </p>
+      </div>
+      <div className="text-right">
+        <p className="text-[8px] font-semibold uppercase leading-relaxed text-muted-foreground">
+          Your email accounts. Your data. Your infrastructure.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
       {/* --- END HERO SECTION --- */}
 
         {/* ========================================================= */}
-{/* SECTION 2 — WHY MALESENDER */}
+{/* SECTION 2 — WHY MAILSENDER */}
 {/* ========================================================= */}
 <section
-  id="why-malesender"
+  id="why-mailsender"
   className="flex min-h-screen items-center border-t bg-muted/20 px-4 py-20"
 >
   <div className="mx-auto grid w-full max-w-6xl items-center gap-16 lg:grid-cols-2">
 
     <div>
       <span className="text-xs font-bold uppercase tracking-[0.25em] text-primary">
-        02 / WHY MALESENDER
+        02 / WHY MAILSENDER
       </span>
 
       <h2 className="mt-6 text-5xl font-black tracking-tighter sm:text-6xl lg:text-7xl">
@@ -656,9 +683,11 @@ export default async function LandingPage() {
     </span>
 
     <   h2 className="mt-8 text-[16vw] font-black uppercase leading-[0.75] tracking-[-0.08em] sm:text-[13vw] lg:text-[10vw]">
-      MALESENDER
+      MAILSENDER
       <br />
-      MALESENDER
+      MAILSENDER
+      <br/>
+      MAILSENDER
     </h2>
 
     <p className="mx-auto mt-10 max-w-xl text-lg leading-relaxed text-muted-foreground">
@@ -683,7 +712,7 @@ export default async function LandingPage() {
 
       <footer className="border-t py-8">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-4 text-sm text-muted-foreground sm:flex-row">
-          <span>© {new Date().getFullYear()} MaleSender — self-hosted.</span>
+          <span>© {new Date().getFullYear()} MailSender — self-hosted.</span>
           <span>Your email accounts. Your data. Your infrastructure.</span>
         </div>
       </footer>

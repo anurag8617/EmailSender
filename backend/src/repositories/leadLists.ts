@@ -135,6 +135,14 @@ export async function existingLeadIdsInList(
   return new Set(rows.map((r) => Number(r.lead_id)));
 }
 
+export async function leadIdsOfList(listId: number): Promise<number[]> {
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT lead_id FROM lead_list_members WHERE lead_list_id = ? ORDER BY id ASC`,
+    [listId]
+  );
+  return rows.map((r) => Number(r.lead_id));
+}
+
 export async function replaceMembers(listId: number, leadIds: number[]): Promise<void> {
   await pool.query(`DELETE FROM lead_list_members WHERE lead_list_id = ?`, [listId]);
   if (leadIds.length > 0) {
