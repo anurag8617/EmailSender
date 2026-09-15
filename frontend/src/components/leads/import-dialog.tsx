@@ -28,11 +28,7 @@ import {
 
 const IMPORT_FIELDS: { key: string; label: string; required?: boolean }[] = [
   { key: "email", label: "Email", required: true },
-  { key: "first_name", label: "First name" },
-  { key: "last_name", label: "Last name" },
-  { key: "company", label: "Company" },
-  { key: "website", label: "Website" },
-  { key: "phone", label: "Phone" },
+  { key: "message", label: "Email message" },
 ];
 
 type Step = "pick" | "map" | "done";
@@ -156,7 +152,11 @@ export function ImportDialog({ open, onOpenChange, onImportComplete }: ImportDia
               </span>
               <Badge variant="secondary">{file?.name}</Badge>
             </div>
-            <LeadListPicker onChange={setSlot} disabled={loading} />
+            <LeadListPicker
+              onChange={setSlot}
+              disabled={loading}
+              initialCreateName={file?.name.replace(/\.(csv|txt)$/i, "") || undefined}
+            />
             <div className="grid gap-3">
               {IMPORT_FIELDS.map((field) => (
                 <div key={field.key} className="grid grid-cols-[110px_1fr] items-center gap-3">
@@ -187,6 +187,9 @@ export function ImportDialog({ open, onOpenChange, onImportComplete }: ImportDia
                 </div>
               ))}
             </div>
+            <p className="text-xs text-muted-foreground">
+              The first line of each message is used as the email subject; the rest is the email body.
+            </p>
             {preview.sample.length > 0 ? (
               <div className="rounded-lg border p-3">
                 <p className="mb-2 text-xs font-medium text-muted-foreground">Sample rows</p>
@@ -254,8 +257,9 @@ export function ImportDialog({ open, onOpenChange, onImportComplete }: ImportDia
             </div>
             {summary.slotName ? (
               <div className="rounded-lg border p-3 text-sm">
-                All imported leads added to slot{" "}
-                <span className="font-medium">{summary.slotName}</span>.
+                All imported leads added to lead list{" "}
+                <span className="font-medium">{summary.slotName}</span>. Pick it when creating a
+                campaign.
               </div>
             ) : null}
             <DialogFooter>

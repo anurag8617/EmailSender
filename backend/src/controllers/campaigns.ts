@@ -2,6 +2,8 @@ import { z } from "zod";
 import * as campaignRepository from "../repositories/campaigns";
 import * as templateRepository from "../repositories/templates";
 import * as leadListRepository from "../repositories/leadLists";
+import * as jobRepository from "../repositories/jobs";
+import * as suppressionRepository from "../repositories/suppressions";
 import {
   Campaign,
   CampaignCounts,
@@ -51,6 +53,20 @@ const campaignUpdateSchema = campaignSchema.optional().refine((value) => value !
 const paramIdSchema = z.object({
   id: z.coerce.number().int().positive(),
 });
+
+const restartSchema = z
+  .object({
+    start_at: optionalDateTime,
+    end_at: optionalDateTime,
+    scheduled_at: optionalDateTime,
+  })
+  .refine(
+    (value) => {
+      if (!value.start_at || !value.end_at) return true;
+      return Date.parse(value.start_at) < Date.parse(value.end_at);
+    },
+    { message: "End schedule must be after start schedule" }
+  );
 
 async function buildSummary(campaign: Campaign): Promise<CampaignSummary> {
   const countsMap = await campaignRepository.statsFor([campaign.id]);
@@ -134,19 +150,15 @@ async function transitionCampaign(
   }
 
   if (action === "start" || action === "resume") {
-    const [leads, accounts, template] = await Promise.all([
+    const [leads, accounts] = await Promise.all([
       campaignRepository.campaignLeadCount(campaignId),
       campaignRepository.campaignAccountCount(campaignId),
-      campaignRepository.templateForCampaign(campaignId),
     ]);
     if (leads === 0) {
       throw new AppError("Add at least one lead before starting the campaign", 400);
     }
     if (accounts === 0) {
       throw new AppError("Select at least one sender account before starting the campaign", 400);
-    }
-    if (!template) {
-      throw new AppError("Select an email template before starting the campaign", 400);
     }
   }
 
@@ -285,4 +297,96 @@ export const resumeCampaign = asyncHandler(async (req, res) => {
 export const cancelCampaign = asyncHandler(async (req, res) => {
   const { id } = paramIdSchema.parse(req.params);
   res.json({ data: await transitionCampaign(id, req.user!.userId, "cancel") });
+});
+
+function pickAccount(accountIds: number[], usage: Map<number, number>): number {
+  let best = accountIds[0];
+  let bestCount = Number.POSITIVE_INFINITY;
+  for (const id of accountIds) {
+    const count = usage.get(id) ?? 0;
+    if (count < bestCount) {
+      bestCount = count;
+      best = id;
+    }
+  }
+  return best;
+}
+
+export const restartCampaign = asyncHandler(async (req, res) => {
+  const { id } = paramIdSchema.parse(req.params);
+  const input = restartSchema.parse(req.body ?? {});
+  const userId = req.user!.userId;
+
+  const campaign = await campaignRepository.findById(id, userId);
+  if (!campaign) {
+    res.status(404).json({ message: "Campaign not found" });
+    return;
+  }
+  if (campaign.status === "ACTIVE") {
+    res.status(409).json({ message: "Pause the campaign before restarting it" });
+    return;
+  }
+
+  const [leads, template, activeAccountIds] = await Promise.all([
+    campaignRepository.leadsOfCampaign(id),
+    campaignRepository.templateForCampaign(id),
+    campaignRepository.campaignActiveAccountIds(id),
+  ]);
+  if (leads.length === 0) {
+    res.status(400).json({ message: "This campaign has no recipients to restart" });
+    return;
+  }
+  if (activeAccountIds.length === 0) {
+    res.status(400).json({ message: "Select at least one active sender account before restarting the campaign" });
+    return;
+  }
+
+  await campaignRepository.deleteJobsForCampaign(id);
+
+  await campaignRepository.update(id, userId, {
+    start_at: input.start_at ?? null,
+    end_at: input.end_at ?? null,
+  });
+
+  const baseSchedule = input.start_at
+    ? new Date(input.start_at)
+    : input.scheduled_at
+      ? new Date(input.scheduled_at)
+      : new Date();
+  const usage = new Map<number, number>();
+  const rows: jobRepository.NewJobRow[] = [];
+
+  for (const lead of leads) {
+    if (await suppressionRepository.isSuppressed(lead.email)) {
+      rows.push({
+        campaign_id: id,
+        lead_id: lead.id,
+        email_account_id: null,
+        template_id: template?.id ?? null,
+        scheduled_at: null,
+        status: "SKIPPED",
+        error_message: "lead is suppressed",
+      });
+      continue;
+    }
+    const accountId = pickAccount(activeAccountIds, usage);
+    usage.set(accountId, (usage.get(accountId) ?? 0) + 1);
+    rows.push({
+      campaign_id: id,
+      lead_id: lead.id,
+      email_account_id: accountId,
+      template_id: template?.id ?? null,
+      scheduled_at: new Date(baseSchedule.getTime() + Math.floor(Math.random() * 31) * 1000),
+      status: "PENDING",
+    });
+  }
+
+  if (rows.length > 0) {
+    await jobRepository.insertJobs(rows);
+  }
+
+  await campaignRepository.setCampaignStatus(id, "DRAFT");
+
+  const updated = await campaignRepository.findById(id, userId);
+  res.json({ data: await buildSummary(updated!) });
 });

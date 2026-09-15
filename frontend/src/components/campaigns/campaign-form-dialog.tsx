@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import {
   apiFetch,
@@ -143,11 +144,6 @@ export function CampaignFormDialog({
     event.preventDefault();
     setError(null);
 
-    if (!templateId) {
-      setError("Select an email template before saving the campaign");
-      return;
-    }
-
     if (!selectedLeadListId && !campaign) {
       setError("Select a lead list before saving the campaign");
       return;
@@ -161,7 +157,7 @@ export function CampaignFormDialog({
       end_at: endAt || null,
       daily_limit: Number(dailyLimit),
       hourly_limit: Number(hourlyLimit),
-      template_id: Number(templateId),
+      template_id: templateId ? Number(templateId) : null,
       account_ids: [...accountIds],
     };
     if (selectedLeadListId !== null) {
@@ -231,9 +227,20 @@ export function CampaignFormDialog({
                     Change
                   </Button>
                   {selectedLeadListId !== null ? (
-                    <Button type="button" variant="outline" size="sm" onClick={handleClearSlot}>
-                      Clear
-                    </Button>
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        nativeButton={false}
+                        render={<Link href={`/lead-lists/${selectedLeadListId}`} />}
+                      >
+                        View leads
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={handleClearSlot}>
+                        Clear
+                      </Button>
+                    </>
                   ) : null}
                 </div>
               </div>
@@ -265,12 +272,10 @@ export function CampaignFormDialog({
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="campaign-template" className="after:ml-0.5 after:text-destructive after:content-['*']">
-              Email template
-            </Label>
+            <Label htmlFor="campaign-template">Email template</Label>
             <Select value={templateId} onValueChange={(value) => setTemplateId(value ?? "")}>
               <SelectTrigger id="campaign-template" className="w-full">
-                <SelectValue placeholder="Select a template" />
+                <SelectValue placeholder="No template" />
               </SelectTrigger>
               <SelectContent>
                 {templates.length === 0 ? (
@@ -287,7 +292,8 @@ export function CampaignFormDialog({
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Template variables are filled from each lead record when the email is sent.
+              Optional if each lead has its own message. Template variables are filled from the lead
+              record when the email is sent.
             </p>
           </div>
 

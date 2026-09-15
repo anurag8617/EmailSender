@@ -15,6 +15,8 @@ export type Lead = {
   email: string;
   website: string | null;
   phone: string | null;
+  subject: string | null;
+  message: string | null;
   custom_data: Record<string, unknown> | null;
   status: string;
   created_at: string;
@@ -149,10 +151,20 @@ export type CampaignSummary = {
   progress: number;
 };
 
+export type CampaignRecipient = Lead & {
+  job_id: number | null;
+  job_status: string | null;
+  scheduled_at: string | null;
+  sent_at: string | null;
+  failed_at: string | null;
+  attempts: number;
+  error_message: string | null;
+};
+
 export type CampaignDetail = CampaignSummary & {
   template_id: number | null;
   template_name: string | null;
-  leads: Lead[];
+  leads: CampaignRecipient[];
   accounts: { id: number; email: string; status: string }[];
 };
 

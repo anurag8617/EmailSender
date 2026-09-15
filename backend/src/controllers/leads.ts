@@ -17,6 +17,8 @@ const leadSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(255),
   website: nullableString(255),
   phone: nullableString(100),
+  subject: nullableString(255),
+  message: nullableString(5000),
   custom_data: z.record(z.string(), z.unknown()).optional(),
   status: z.string().trim().min(1).max(20).optional(),
   list_id: z.coerce.number().int().positive().optional(),

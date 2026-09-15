@@ -8,6 +8,7 @@ import {
   getCampaignStats,
   listCampaigns,
   pauseCampaign,
+  restartCampaign,
   resumeCampaign,
   startCampaign,
   updateCampaign,
@@ -24,6 +25,7 @@ router.post("/:id/start", startCampaign);
 router.post("/:id/pause", pauseCampaign);
 router.post("/:id/resume", resumeCampaign);
 router.post("/:id/cancel", cancelCampaign);
+router.post("/:id/restart", restartCampaign);
 router.get("/:id", getCampaign);
 router.put("/:id", updateCampaign);
 router.delete("/:id", deleteCampaign);

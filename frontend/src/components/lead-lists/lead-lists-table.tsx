@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Search, Trash2, Plus, Users } from "lucide-react";
+import Link from "next/link";
+import { Search, Trash2, Plus, Users, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch, type LeadGroup, type LeadGroupList } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -28,7 +29,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { LeadListFormDialog } from "@/components/lead-lists/lead-list-form-dialog";
-import { LeadListMembersDialog } from "@/components/lead-lists/lead-list-members-dialog";
+import { ImportDialog } from "@/components/leads/import-dialog";
 
 const PAGE_SIZE = 10;
 
@@ -43,8 +44,8 @@ export function LeadListsTable() {
   const [error, setError] = useState<string | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<LeadGroup | null>(null);
-  const [viewing, setViewing] = useState<LeadGroup | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<LeadGroup | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -115,6 +116,14 @@ export function LeadListsTable() {
             </div>
             <Button
               type="button"
+              variant="outline"
+              onClick={() => setImportOpen(true)}
+            >
+              <Upload />
+              Import CSV
+            </Button>
+            <Button
+              type="button"
               onClick={() => {
                 setEditing(null);
                 setFormOpen(true);
@@ -156,7 +165,14 @@ export function LeadListsTable() {
               <TableBody>
                 {lists.map((list) => (
                   <TableRow key={list.id}>
-                    <TableCell className="font-medium">{list.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <Link
+                        href={`/lead-lists/${list.id}`}
+                        className="hover:text-primary hover:underline"
+                      >
+                        {list.name}
+                      </Link>
+                    </TableCell>
                     <TableCell>
                       <Badge variant="secondary">{list.lead_count}</Badge>
                     </TableCell>
@@ -169,8 +185,9 @@ export function LeadListsTable() {
                           type="button"
                           variant="ghost"
                           size="icon-sm"
+                          nativeButton={false}
                           aria-label={`View leads in ${list.name}`}
-                          onClick={() => setViewing(list)}
+                          render={<Link href={`/lead-lists/${list.id}`} />}
                         >
                           <Users />
                         </Button>
@@ -244,11 +261,10 @@ export function LeadListsTable() {
         }}
       />
 
-      <LeadListMembersDialog
-        list={viewing}
-        onOpenChange={(open) => !open && setViewing(null)}
-        onChanged={(list) => {
-          setViewing(list);
+      <ImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImportComplete={() => {
           setReload((value) => value + 1);
         }}
       />

@@ -207,9 +207,9 @@ export async function membersOfList(
   const args: unknown[] = [listId, userId];
 
   if (params.search?.trim()) {
-    where.push("(le.email LIKE ? OR le.company LIKE ? OR le.first_name LIKE ? OR le.last_name LIKE ?)");
+    where.push("(le.email LIKE ? OR le.company LIKE ? OR le.first_name LIKE ? OR le.last_name LIKE ? OR le.message LIKE ?)");
     const term = `%${params.search.trim()}%`;
-    args.push(term, term, term, term);
+    args.push(term, term, term, term, term);
   }
 
   const whereSql = `WHERE ${where.join(" AND ")}`;
@@ -227,7 +227,7 @@ export async function membersOfList(
   const offset = (params.page - 1) * params.pageSize;
   const [rows] = await pool.query<LeadRow[]>(
     `SELECT le.id, le.first_name, le.last_name, le.company, le.email, le.website,
-            le.phone, le.custom_data, le.status, le.created_at, le.updated_at
+            le.phone, le.subject, le.message, le.custom_data, le.status, le.created_at, le.updated_at
      FROM lead_list_members llm
      JOIN lead_lists ll ON ll.id = llm.lead_list_id
      JOIN leads le ON le.id = llm.lead_id

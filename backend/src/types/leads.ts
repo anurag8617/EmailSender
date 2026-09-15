@@ -6,6 +6,8 @@ export interface Lead {
   email: string;
   website: string | null;
   phone: string | null;
+  subject: string | null;
+  message: string | null;
   custom_data: Record<string, unknown> | null;
   status: string;
   created_at: string;
@@ -19,6 +21,8 @@ export interface LeadInput {
   email: string;
   website?: string | null;
   phone?: string | null;
+  subject?: string | null;
+  message?: string | null;
   custom_data?: Record<string, unknown> | null;
   status?: string;
 }
@@ -46,18 +50,10 @@ export interface PreviewRow {
 
 export const IMPORT_FIELDS: ImportField[] = [
   { key: "email", label: "Email", required: true },
-  { key: "first_name", label: "First name" },
-  { key: "last_name", label: "Last name" },
-  { key: "company", label: "Company" },
-  { key: "website", label: "Website" },
-  { key: "phone", label: "Phone" },
+  { key: "message", label: "Email message" },
 ];
 
 export const FIELD_ALIASES: Record<string, string[]> = {
   email: ["email", "e-mail", "e-mail address", "email address"],
-  first_name: ["first_name", "firstname", "first name", "first"],
-  last_name: ["last_name", "lastname", "last name", "last"],
-  company: ["company", "company name", "organization", "organisation", "org"],
-  website: ["website", "site", "web", "url", "domain"],
-  phone: ["phone", "phone number", "tel", "telephone", "mobile", "contact number"],
+  message: ["message", "email message", "email", "e-mail", "mail", "body", "content", "message text"],
 };

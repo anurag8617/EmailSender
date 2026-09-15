@@ -23,12 +23,26 @@ export type LeadListPickerValue = {
 type LeadListPickerProps = {
   onChange: (value: LeadListPickerValue) => void;
   disabled?: boolean;
+  initialCreateName?: string;
 };
 
-export function LeadListPicker({ onChange, disabled }: LeadListPickerProps) {
+export function LeadListPicker({
+  onChange,
+  disabled,
+  initialCreateName,
+}: LeadListPickerProps) {
   const [lists, setLists] = useState<LeadGroup[]>([]);
-  const [selection, setSelection] = useState<string>(NO_SLOT);
-  const [newListName, setNewListName] = useState("");
+  const [selection, setSelection] = useState<string>(
+    initialCreateName ? CREATE_NEW : NO_SLOT
+  );
+  const [newListName, setNewListName] = useState(initialCreateName ?? "");
+
+  useEffect(() => {
+    if (initialCreateName) {
+      onChange({ listId: null, newListName: initialCreateName });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,13 +74,13 @@ export function LeadListPicker({ onChange, disabled }: LeadListPickerProps) {
 
   return (
     <div className="grid gap-2">
-      <Label>Add to slot</Label>
+      <Label>Add to lead list</Label>
       <Select value={selection} onValueChange={handleSelect} disabled={disabled}>
         <SelectTrigger className="w-full">
-          <SelectValue placeholder="No slot (optional)" />
+          <SelectValue placeholder="No list (optional)" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={NO_SLOT}>No slot (optional)</SelectItem>
+          <SelectItem value={NO_SLOT}>No list (optional)</SelectItem>
           {lists.length > 0
             ? lists.map((list) => (
                 <SelectItem key={list.id} value={String(list.id)}>
@@ -74,13 +88,13 @@ export function LeadListPicker({ onChange, disabled }: LeadListPickerProps) {
                 </SelectItem>
               ))
             : null}
-          <SelectItem value={CREATE_NEW}>Create new slot…</SelectItem>
+          <SelectItem value={CREATE_NEW}>Create new list…</SelectItem>
         </SelectContent>
       </Select>
       {selection === CREATE_NEW ? (
         <div className="grid gap-2">
           <Label htmlFor="new-slot-name" className="text-xs text-muted-foreground">
-            New slot name
+            New list name
           </Label>
           <Input
             id="new-slot-name"

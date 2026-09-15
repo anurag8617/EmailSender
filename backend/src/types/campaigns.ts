@@ -46,12 +46,22 @@ export interface CampaignDetail extends Campaign {
   progress: number;
   template_id: number | null;
   template_name: string | null;
-  leads: Lead[];
+  leads: CampaignRecipient[];
   accounts: {
     id: number;
     email: string;
     status: string;
   }[];
+}
+
+export interface CampaignRecipient extends Lead {
+  job_id: number | null;
+  job_status: string | null;
+  scheduled_at: string | null;
+  sent_at: string | null;
+  failed_at: string | null;
+  attempts: number;
+  error_message: string | null;
 }
 
 export function computeProgress(counts: CampaignCounts): number {

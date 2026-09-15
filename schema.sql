@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS leads (
   email       VARCHAR(255) NOT NULL,
   website     VARCHAR(255) DEFAULT NULL,
   phone       VARCHAR(100) DEFAULT NULL,
+  subject     VARCHAR(255) DEFAULT NULL,
+  message     TEXT DEFAULT NULL,
   custom_data JSON DEFAULT NULL,
   status      VARCHAR(20)  NOT NULL DEFAULT 'new',
   created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

@@ -10,7 +10,6 @@ import {
   Mail,
   Megaphone,
   Settings,
-  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -18,7 +17,6 @@ import { LogoutButton } from "@/components/logout-button";
 
 const navLinks = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/leads", label: "Leads", icon: Users },
   { href: "/lead-lists", label: "Lead Lists", icon: ListOrdered },
   { href: "/email-accounts", label: "Email Accounts", icon: Mail },
   { href: "/campaigns", label: "Campaigns", icon: Megaphone },

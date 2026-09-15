@@ -15,7 +15,7 @@ export default function LoginPage() {
         <CardHeader>
           <CardTitle>Log in</CardTitle>
           <CardDescription>
-            Access your MailSender dashboard.
+            Access your MailSender dashboard. 
           </CardDescription>
         </CardHeader>
         <CardContent>

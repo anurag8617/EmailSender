@@ -14,6 +14,26 @@ export function isEmailValid(email: string): boolean {
   return EMAIL_RE.test(email);
 }
 
+export function splitEmailText(
+  text: string | null
+): { subject: string | null; body: string | null } {
+  const trimmed = (text ?? "").trim();
+  if (!trimmed) return { subject: null, body: null };
+  const subjectMatch = trimmed.match(/^[Ss]ubject\s*:\s*(.*?)\r?\n([\s\S]*)$/);
+  if (subjectMatch) {
+    const subject = subjectMatch[1].trim();
+    const body = subjectMatch[2].trim();
+    return { subject: subject || null, body: body || null };
+  }
+  const lineEnd = trimmed.indexOf("\n");
+  if (lineEnd === -1) {
+    return { subject: trimmed, body: null };
+  }
+  const subject = trimmed.slice(0, lineEnd).trim();
+  const body = trimmed.slice(lineEnd + 1).trim();
+  return { subject: subject || null, body: body || null };
+}
+
 export function normalizeHeader(header: string): string {
   return header.trim().toLowerCase();
 }
@@ -164,13 +184,18 @@ export async function runImport(input: {
       if (value !== null) customData[column.trim()] = value;
     }
 
+    const message = getCell(row, mapping["message"] ?? "");
+    const { subject, body } = splitEmailText(message);
+
     toInsert.push({
       email: emailLower,
-      first_name: getCell(row, mapping["first_name"] ?? ""),
-      last_name: getCell(row, mapping["last_name"] ?? ""),
-      company: getCell(row, mapping["company"] ?? ""),
-      website: getCell(row, mapping["website"] ?? ""),
-      phone: getCell(row, mapping["phone"] ?? ""),
+      subject,
+      message: body,
+      first_name: null,
+      last_name: null,
+      company: null,
+      website: null,
+      phone: null,
       custom_data: Object.keys(customData).length > 0 ? customData : null,
     });
   }

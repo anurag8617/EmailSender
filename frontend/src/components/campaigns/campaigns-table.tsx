@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   CalendarDays,
+  Eye,
   Loader2,
   Megaphone,
   Pause,
@@ -41,6 +42,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CampaignFormDialog } from "@/components/campaigns/campaign-form-dialog";
+import { CampaignDetailsDialog } from "@/components/campaigns/campaign-details-dialog";
+import { CampaignRestartDialog } from "@/components/campaigns/campaign-restart-dialog";
 import { SendingIndicator } from "@/components/campaigns/sending-indicator";
 import { SendProgress } from "@/components/campaigns/send-progress";
 
@@ -70,6 +73,8 @@ export function CampaignsTable() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CampaignSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [detailsCampaign, setDetailsCampaign] = useState<CampaignSummary | null>(null);
+  const [restartTarget, setRestartTarget] = useState<CampaignSummary | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -251,6 +256,29 @@ export function CampaignsTable() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          aria-label={`View details for ${campaign.name}`}
+                          onClick={() => setDetailsCampaign(campaign)}
+                        >
+                          <Eye />
+                          Details
+                        </Button>
+                        {campaign.status !== "ACTIVE" ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            aria-label={`Restart ${campaign.name}`}
+                            disabled={busyId === campaign.id}
+                            onClick={() => setRestartTarget(campaign)}
+                          >
+                            <RotateCcw />
+                            Restart
+                          </Button>
+                        ) : null}
                         {campaign.status === "DRAFT" ? (
                           <Button
                             type="button"
@@ -342,6 +370,24 @@ export function CampaignsTable() {
           )}
         </CardContent>
       </Card>
+
+      <CampaignDetailsDialog
+        key={detailsCampaign?.id ?? "details-none"}
+        open={detailsCampaign !== null}
+        onOpenChange={(open) => !open && setDetailsCampaign(null)}
+        campaign={detailsCampaign}
+      />
+
+      <CampaignRestartDialog
+        key={restartTarget?.id ?? "restart-none"}
+        open={restartTarget !== null}
+        onOpenChange={(open) => !open && setRestartTarget(null)}
+        campaign={restartTarget}
+        onRestarted={(message) => {
+          setReload((value) => value + 1);
+          toast.success(message);
+        }}
+      />
 
       <CampaignFormDialog
         key={formKey}

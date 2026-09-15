@@ -95,6 +95,8 @@ export interface ProcessingJob extends EmailJob {
   lead_last_name: string | null;
   lead_company: string | null;
   lead_website: string | null;
+  lead_subject: string | null;
+  lead_message: string | null;
   template_id: number | null;
   template_name: string | null;
   template_subject: string | null;
@@ -113,6 +115,7 @@ export async function processingById(jobId: number): Promise<ProcessingJob | nul
             c.start_at AS campaign_start_at, c.end_at AS campaign_end_at,
             l.email AS lead_email, l.first_name AS lead_first_name, l.last_name AS lead_last_name,
             l.company AS lead_company, l.website AS lead_website,
+            l.subject AS lead_subject, l.message AS lead_message,
             t.subject AS template_subject, t.body AS template_body, t.name AS template_name,
             ea.email AS account_email
        FROM email_jobs ej
@@ -169,6 +172,14 @@ export async function skip(jobId: number, error: string): Promise<void> {
       WHERE id = ?`,
     [error, jobId]
   );
+}
+
+export async function attemptsForJob(jobId: number): Promise<number> {
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT attempts FROM email_jobs WHERE id = ? LIMIT 1`,
+    [jobId]
+  );
+  return Number(rows[0]?.attempts ?? 0);
 }
 
 export async function incrementAccountSentToday(accountId: number): Promise<void> {

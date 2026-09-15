@@ -4,9 +4,9 @@ import {
   Campaign,
   CampaignCounts,
   CampaignInput,
+  CampaignRecipient,
   CampaignStatus,
 } from "../types/campaigns";
-import { Lead } from "../types/leads";
 
 interface CampaignRow extends RowDataPacket, Omit<Campaign, "start_at" | "end_at"> {
   start_at: string | null;
@@ -233,12 +233,15 @@ export async function campaignAccountCount(campaignId: number): Promise<number> 
   return Number(rows[0]?.count ?? 0);
 }
 
-export async function leadsOfCampaign(campaignId: number): Promise<Lead[]> {
+export async function leadsOfCampaign(campaignId: number): Promise<CampaignRecipient[]> {
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT l.id, l.first_name, l.last_name, l.company, l.email, l.website, l.phone,
-            l.custom_data, l.status, l.created_at, l.updated_at
+            l.subject, l.message, l.custom_data, l.status, l.created_at, l.updated_at,
+            ej.id AS job_id, ej.status AS job_status, ej.scheduled_at, ej.sent_at,
+            ej.failed_at, ej.attempts, ej.error_message
      FROM leads l
      JOIN campaign_leads cl ON cl.lead_id = l.id
+     LEFT JOIN email_jobs ej ON ej.campaign_id = cl.campaign_id AND ej.lead_id = l.id
      WHERE cl.campaign_id = ?
      ORDER BY l.created_at DESC, l.id DESC`,
     [campaignId]
@@ -249,7 +252,9 @@ export async function leadsOfCampaign(campaignId: number): Promise<Lead[]> {
       row.custom_data && typeof row.custom_data === "string"
         ? JSON.parse(row.custom_data)
         : row.custom_data ?? null,
-  })) as Lead[];
+    job_id: row.job_id === null || row.job_id === undefined ? null : Number(row.job_id),
+    attempts: row.attempts === null || row.attempts === undefined ? 0 : Number(row.attempts),
+  })) as unknown as CampaignRecipient[];
 }
 
 export async function accountsOfCampaign(campaignId: number): Promise<
@@ -403,4 +408,12 @@ export async function setCampaignStatus(campaignId: number, status: CampaignStat
     `UPDATE campaigns SET status = ?, updated_at = NOW() WHERE id = ?`,
     [status, campaignId]
   );
+}
+
+export async function deleteJobsForCampaign(campaignId: number): Promise<number> {
+  const [result] = await pool.query<ResultSetHeader>(
+    `DELETE FROM email_jobs WHERE campaign_id = ?`,
+    [campaignId]
+  );
+  return result.affectedRows;
 }

@@ -17,7 +17,7 @@ function mapRow(row: LeadRow): Lead {
   };
 }
 
-const SELECT_COLUMNS = `id, first_name, last_name, company, email, website, phone, custom_data, status, created_at, updated_at`;
+const SELECT_COLUMNS = `id, first_name, last_name, company, email, website, phone, subject, message, custom_data, status, created_at, updated_at`;
 
 export interface LeadListParams {
   page: number;
@@ -39,9 +39,9 @@ export async function list(params: LeadListParams): Promise<LeadListResult> {
   const args: unknown[] = [];
 
   if (params.search?.trim()) {
-    where.push("(email LIKE ? OR company LIKE ? OR first_name LIKE ? OR last_name LIKE ?)");
+    where.push("(email LIKE ? OR company LIKE ? OR first_name LIKE ? OR last_name LIKE ? OR message LIKE ?)");
     const term = `%${params.search.trim()}%`;
-    args.push(term, term, term, term);
+    args.push(term, term, term, term, term);
   }
   if (params.status?.trim()) {
     where.push("status = ?");
@@ -91,8 +91,8 @@ export async function findByEmails(emails: string[]): Promise<Map<string, number
 
 export async function create(input: LeadInput): Promise<number> {
   const [result] = await pool.query(
-    `INSERT INTO leads (first_name, last_name, company, email, website, phone, custom_data, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO leads (first_name, last_name, company, email, website, phone, subject, message, custom_data, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.first_name ?? null,
       input.last_name ?? null,
@@ -100,6 +100,8 @@ export async function create(input: LeadInput): Promise<number> {
       input.email,
       input.website ?? null,
       input.phone ?? null,
+      input.subject ?? null,
+      input.message ?? null,
       input.custom_data && Object.keys(input.custom_data).length > 0
         ? JSON.stringify(input.custom_data)
         : null,
@@ -111,7 +113,7 @@ export async function create(input: LeadInput): Promise<number> {
 
 export async function bulkCreate(rows: LeadInput[]): Promise<number> {
   if (rows.length === 0) return 0;
-  const placeholders = rows.map(() => "(?, ?, ?, ?, ?, ?, ?, ?)").join(",");
+  const placeholders = rows.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(",");
   const args: unknown[] = [];
   for (const input of rows) {
     args.push(
@@ -121,6 +123,8 @@ export async function bulkCreate(rows: LeadInput[]): Promise<number> {
       input.email,
       input.website ?? null,
       input.phone ?? null,
+      input.subject ?? null,
+      input.message ?? null,
       input.custom_data && Object.keys(input.custom_data).length > 0
         ? JSON.stringify(input.custom_data)
         : null,
@@ -128,7 +132,7 @@ export async function bulkCreate(rows: LeadInput[]): Promise<number> {
     );
   }
   const [result] = await pool.query(
-    `INSERT INTO leads (first_name, last_name, company, email, website, phone, custom_data, status)
+    `INSERT INTO leads (first_name, last_name, company, email, website, phone, subject, message, custom_data, status)
      VALUES ${placeholders}`,
     args
   );
@@ -152,6 +156,8 @@ export async function update(id: number, input: Partial<LeadInput>): Promise<boo
   assignIf("email", input.email);
   assignIf("website", input.website ?? null);
   assignIf("phone", input.phone ?? null);
+  assignIf("subject", input.subject ?? null);
+  assignIf("message", input.message ?? null);
   assignIf("status", input.status);
   if (input.custom_data !== undefined) {
     sets.push("custom_data = ?");

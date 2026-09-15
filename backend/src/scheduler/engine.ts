@@ -81,7 +81,6 @@ async function generateJobs(): Promise<void> {
     if (!windowState.within) continue;
 
     const template = await campaignRepo.templateForCampaign(campaign.id);
-    if (!template) continue;
 
     const [sentToday, sentThisHour, accountIds] = await Promise.all([
       jobRepo.sentTodayForCampaign(campaign.id),
@@ -113,7 +112,7 @@ async function generateJobs(): Promise<void> {
           campaign_id: campaign.id,
           lead_id: lead.lead_id,
           email_account_id: null,
-          template_id: template.id,
+          template_id: template?.id ?? null,
           scheduled_at: null,
           status: "SKIPPED",
           error_message: "lead is suppressed",
@@ -126,7 +125,7 @@ async function generateJobs(): Promise<void> {
         campaign_id: campaign.id,
         lead_id: lead.lead_id,
         email_account_id: accountId,
-        template_id: template.id,
+        template_id: template?.id ?? null,
         scheduled_at: jitteredNow(),
         status: "PENDING",
       });
@@ -142,7 +141,12 @@ async function requeueBatch(accountId: number, delayMs: number): Promise<void> {
   const ids = await jobRepo.dueJobIds(accountId, JOBS_PER_ACCOUNT_PER_TICK);
   const scheduledAt = new Date(Date.now() + delayMs);
   for (const id of ids) {
-    await jobRepo.requeue(id, scheduledAt);
+    const attempts = await jobRepo.attemptsForJob(id);
+    if (attempts >= MAX_ATTEMPTS) {
+      await jobRepo.markFailed(id, "max retries exceeded: account unavailable");
+      continue;
+    }
+    await jobRepo.requeue(id, scheduledAt, "account unavailable");
   }
 }
 
@@ -174,9 +178,33 @@ async function processJob(
     return;
   }
 
-  if (!job.template_subject || !job.template_body) {
-    await jobRepo.markFailed(jobId, "permanent: campaign has no email template");
-    await jobRepo.recordEvent(jobId, job.lead_id, "FAILED", null, { error: "no template" });
+  const leadContext = {
+    first_name: job.lead_first_name,
+    last_name: job.lead_last_name,
+    company: job.lead_company,
+    email: job.lead_email,
+    website: job.lead_website,
+  };
+
+  let rendered: ReturnType<typeof renderEmail> | null = null;
+  if (job.lead_subject || job.lead_message) {
+    rendered = renderEmail(
+      { subject: job.lead_subject ?? "", body: job.lead_message ?? "" },
+      leadContext,
+      account.email,
+      job.campaign_id
+    );
+  } else if (job.template_subject && job.template_body) {
+    rendered = renderEmail(
+      { subject: job.template_subject, body: job.template_body },
+      leadContext,
+      account.email,
+      job.campaign_id
+    );
+  }
+  if (!rendered) {
+    await jobRepo.markFailed(jobId, "permanent: lead has no email message and campaign has no email template");
+    await jobRepo.recordEvent(jobId, job.lead_id, "FAILED", null, { error: "no template or message" });
     return;
   }
 
@@ -209,19 +237,6 @@ async function processJob(
     await jobRepo.requeue(jobId, new Date(Date.now() + retryDelayMs(job.attempts)), "outside allowed hours");
     return;
   }
-
-  const rendered = renderEmail(
-    { subject: job.template_subject, body: job.template_body },
-    {
-      first_name: job.lead_first_name,
-      last_name: job.lead_last_name,
-      company: job.lead_company,
-      email: job.lead_email,
-      website: job.lead_website,
-    },
-    account.email,
-    job.campaign_id
-  );
 
   try {
     const result = await sendEmail(credentials, {
@@ -272,6 +287,7 @@ async function processDueJobs(): Promise<void> {
       credentials = accountRepo.deserializeCredentials(account.credentials_reference);
     } catch {
       await accountRepo.setStatusById(account.id, "disabled");
+      await requeueBatch(accountId, 5 * 60 * 1000);
       continue;
     }
 
