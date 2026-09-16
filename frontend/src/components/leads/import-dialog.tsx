@@ -28,8 +28,32 @@ import {
 
 const IMPORT_FIELDS: { key: string; label: string; required?: boolean }[] = [
   { key: "email", label: "Email", required: true },
+  { key: "first_name", label: "First name" },
+  { key: "last_name", label: "Last name" },
+  { key: "company", label: "Company" },
+  { key: "website", label: "Website" },
+  { key: "phone", label: "Phone" },
+  { key: "subject", label: "Subject" },
   { key: "message", label: "Email message" },
 ];
+
+function splitEmailText(text: string | null): { subject: string | null; body: string | null } {
+  const trimmed = (text ?? "").trim();
+  if (!trimmed) return { subject: null, body: null };
+  const subjectMatch = trimmed.match(/^[Ss]ubject\s*:\s*(.*?)\r?\n([\s\S]*)$/);
+  if (subjectMatch) {
+    const subject = subjectMatch[1].trim();
+    const body = subjectMatch[2].trim();
+    return { subject: subject || null, body: body || null };
+  }
+  const lineEnd = trimmed.indexOf("\n");
+  if (lineEnd === -1) {
+    return { subject: trimmed, body: null };
+  }
+  const subject = trimmed.slice(0, lineEnd).trim();
+  const body = trimmed.slice(lineEnd + 1).trim();
+  return { subject: subject || null, body: body || null };
+}
 
 type Step = "pick" | "map" | "done";
 
@@ -106,7 +130,7 @@ export function ImportDialog({ open, onOpenChange, onImportComplete }: ImportDia
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Import leads from CSV</DialogTitle>
           <DialogDescription>
@@ -169,7 +193,10 @@ export function ImportDialog({ open, onOpenChange, onImportComplete }: ImportDia
                   <Select
                     value={mapping[field.key] ?? ""}
                     onValueChange={(value) =>
-                      setMapping((prev) => ({ ...prev, [field.key]: value || null }))
+                      setMapping((prev) => ({
+                        ...prev,
+                        [field.key]: value === "__none__" ? null : value,
+                      }))
                     }
                   >
                     <SelectTrigger id={`map-${field.key}`} className="w-full">
@@ -188,32 +215,54 @@ export function ImportDialog({ open, onOpenChange, onImportComplete }: ImportDia
               ))}
             </div>
             <p className="text-xs text-muted-foreground">
-              The first line of each message is used as the email subject; the rest is the email body.
+              {`Map a Subject column for the email subject, and Message is the email body. If no Subject column is mapped, the first line of Message is used as the subject. Variables like {{first_name}} and {{company}} fill in automatically when their columns are mapped.`}
             </p>
             {preview.sample.length > 0 ? (
-              <div className="rounded-lg border p-3">
-                <p className="mb-2 text-xs font-medium text-muted-foreground">Sample rows</p>
-                <div className="overflow-x-auto text-xs">
-                  <table className="w-full">
+              <div className="overflow-hidden rounded-lg border">
+                <p className="mb-2 px-3 pt-3 text-xs font-medium text-muted-foreground">
+                  Sample leads after import
+                </p>
+                <div className="max-h-64 overflow-auto">
+                  <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b">
-                        {preview.columns.map((column) => (
-                          <th key={column} className="px-2 py-1 text-left font-medium">
-                            {column}
-                          </th>
-                        ))}
+                        <th className="sticky top-0 bg-background px-2 py-2 text-left font-medium">
+                          Email
+                        </th>
+                        <th className="sticky top-0 bg-background px-2 py-2 text-left font-medium">
+                          First name
+                        </th>
+                        <th className="sticky top-0 bg-background px-2 py-2 text-left font-medium">
+                          Company
+                        </th>
+                        <th className="sticky top-0 bg-background px-2 py-2 text-left font-medium">
+                          Subject
+                        </th>
+                        <th className="sticky top-0 bg-background px-2 py-2 text-left font-medium">
+                          Message
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {preview.sample.map((row, index) => (
-                        <tr key={index} className="border-b last:border-0">
-                          {preview.columns.map((column) => (
-                            <td key={column} className="px-2 py-1">
-                              {row[column] || "—"}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
+                      {preview.sample.map((row, index) => {
+                        const email = mapping.email ? (row[mapping.email] || "") : "";
+                        const firstName = mapping.first_name ? (row[mapping.first_name] || "") : "";
+                        const company = mapping.company ? (row[mapping.company] || "") : "";
+                        const message = mapping.message ? (row[mapping.message] || "") : "";
+                        const subjectFromColumn = mapping.subject ? (row[mapping.subject] || "") : "";
+                        const { subject, body } = subjectFromColumn
+                          ? { subject: subjectFromColumn, body: message }
+                          : splitEmailText(message);
+                        return (
+                          <tr key={index} className="border-b last:border-0">
+                            <td className="px-2 py-1 align-top font-medium">{email || "—"}</td>
+                            <td className="px-2 py-1 align-top">{firstName || "—"}</td>
+                            <td className="px-2 py-1 align-top">{company || "—"}</td>
+                            <td className="px-2 py-1 align-top">{subject || "—"}</td>
+                            <td className="px-2 py-1 align-top">{body || "—"}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

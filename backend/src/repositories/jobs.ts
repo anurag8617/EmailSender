@@ -95,12 +95,15 @@ export interface ProcessingJob extends EmailJob {
   lead_last_name: string | null;
   lead_company: string | null;
   lead_website: string | null;
+  lead_phone: string | null;
+  lead_custom_data: string | null;
   lead_subject: string | null;
   lead_message: string | null;
   template_id: number | null;
   template_name: string | null;
   template_subject: string | null;
   template_body: string | null;
+  template_footer: string | null;
   account_email: string | null;
 }
 
@@ -114,9 +117,10 @@ export async function processingById(jobId: number): Promise<ProcessingJob | nul
             c.status AS campaign_status, c.user_id AS campaign_user_id,
             c.start_at AS campaign_start_at, c.end_at AS campaign_end_at,
             l.email AS lead_email, l.first_name AS lead_first_name, l.last_name AS lead_last_name,
-            l.company AS lead_company, l.website AS lead_website,
+            l.company AS lead_company, l.website AS lead_website, l.phone AS lead_phone,
+            l.custom_data AS lead_custom_data,
             l.subject AS lead_subject, l.message AS lead_message,
-            t.subject AS template_subject, t.body AS template_body, t.name AS template_name,
+            t.subject AS template_subject, t.body AS template_body, t.footer AS template_footer, t.name AS template_name,
             ea.email AS account_email
        FROM email_jobs ej
        JOIN campaigns c ON c.id = ej.campaign_id

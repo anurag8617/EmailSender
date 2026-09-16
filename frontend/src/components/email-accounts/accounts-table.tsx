@@ -27,6 +27,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { AccountFormDialog } from "@/components/email-accounts/account-form-dialog";
+import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 
 export function AccountsTable() {
   const [accounts, setAccounts] = useState<EmailAccount[]>([]);
@@ -40,6 +41,8 @@ export function AccountsTable() {
   const [deleteTarget, setDeleteTarget] = useState<EmailAccount | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [testingId, setTestingId] = useState<number | null>(null);
+
+  useRealtimeRefresh(() => setReload((value) => value + 1));
 
   useEffect(() => {
     let cancelled = false;

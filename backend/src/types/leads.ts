@@ -50,10 +50,22 @@ export interface PreviewRow {
 
 export const IMPORT_FIELDS: ImportField[] = [
   { key: "email", label: "Email", required: true },
+  { key: "first_name", label: "First name" },
+  { key: "last_name", label: "Last name" },
+  { key: "company", label: "Company" },
+  { key: "website", label: "Website" },
+  { key: "phone", label: "Phone" },
+  { key: "subject", label: "Subject" },
   { key: "message", label: "Email message" },
 ];
 
 export const FIELD_ALIASES: Record<string, string[]> = {
   email: ["email", "e-mail", "e-mail address", "email address"],
+  first_name: ["first_name", "firstname", "first name", "given name", "name"],
+  last_name: ["last_name", "lastname", "last name", "surname", "family name"],
+  company: ["company", "company name", "organization", "organisation", "business"],
+  website: ["website", "website url", "web", "site", "domain", "url"],
+  phone: ["phone", "phone number", "phone_number", "telephone", "mobile", "contact"],
+  subject: ["subject", "email subject", "subj"],
   message: ["message", "email message", "email", "e-mail", "mail", "body", "content", "message text"],
 };

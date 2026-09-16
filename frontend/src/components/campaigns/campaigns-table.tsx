@@ -41,11 +41,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { CampaignFormDialog } from "@/components/campaigns/campaign-form-dialog";
+import { CampaignFormDialog, CAMPAIGN_FORM_DRAFT_KEY } from "@/components/campaigns/campaign-form-dialog";
 import { CampaignDetailsDialog } from "@/components/campaigns/campaign-details-dialog";
 import { CampaignRestartDialog } from "@/components/campaigns/campaign-restart-dialog";
 import { SendingIndicator } from "@/components/campaigns/sending-indicator";
 import { SendProgress } from "@/components/campaigns/send-progress";
+import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
   DRAFT: "secondary",
@@ -76,6 +77,8 @@ export function CampaignsTable() {
   const [detailsCampaign, setDetailsCampaign] = useState<CampaignSummary | null>(null);
   const [restartTarget, setRestartTarget] = useState<CampaignSummary | null>(null);
 
+  useRealtimeRefresh(() => setReload((value) => value + 1));
+
   useEffect(() => {
     let cancelled = false;
     apiFetch<{ data: CampaignSummary[] }>("/api/campaigns").then(({ ok, data, error }) => {
@@ -92,6 +95,17 @@ export function CampaignsTable() {
       cancelled = true;
     };
   }, [reload]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!window.sessionStorage.getItem(CAMPAIGN_FORM_DRAFT_KEY)) return;
+    const timer = window.setTimeout(() => {
+      setEditing(null);
+      setFormKey((value) => value + 1);
+      setFormOpen(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   async function runAction(campaign: CampaignSummary, action: string) {
     setBusyId(campaign.id);

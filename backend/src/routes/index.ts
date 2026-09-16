@@ -9,6 +9,7 @@ import campaignsRoutes from "./campaigns";
 import unsubscribeRoutes from "./unsubscribe";
 import suppressionsRoutes from "./suppressions";
 import dashboardRoutes from "./dashboard";
+import eventsRoutes from "./events";
 
 const router = Router();
 
@@ -22,5 +23,6 @@ router.use("/api/campaigns", campaignsRoutes);
 router.use("/api", unsubscribeRoutes);
 router.use("/api/suppressions", suppressionsRoutes);
 router.use("/api/dashboard", dashboardRoutes);
+router.use("/api", eventsRoutes);
 
 export default router;

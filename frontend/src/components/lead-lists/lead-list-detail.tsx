@@ -31,6 +31,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { LeadListFormDialog } from "@/components/lead-lists/lead-list-form-dialog";
+import { LeadEditDialog } from "@/components/lead-lists/lead-edit-dialog";
 
 const PAGE_SIZE = 10;
 
@@ -52,6 +53,8 @@ export function LeadListDetail({ listId }: { listId: number }) {
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const [editingLead, setEditingLead] = useState<Lead | null>(null);
 
   const [adding, setAdding] = useState(false);
   const [leadSearch, setLeadSearch] = useState("");
@@ -325,6 +328,7 @@ export function LeadListDetail({ listId }: { listId: number }) {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Email</TableHead>
+                    <TableHead>Company</TableHead>
                     <TableHead>Subject</TableHead>
                     <TableHead>Message</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -334,20 +338,32 @@ export function LeadListDetail({ listId }: { listId: number }) {
                   {members.map((lead) => (
                     <TableRow key={lead.id}>
                       <TableCell className="font-medium">{lead.email}</TableCell>
+                      <TableCell className="text-muted-foreground">{lead.company || "—"}</TableCell>
                       <TableCell>{lead.subject || "—"}</TableCell>
                       <TableCell className="max-w-md truncate text-muted-foreground">
                         {lead.message || "—"}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`Remove ${lead.email}`}
-                          onClick={() => handleRemoveMember(lead.id, lead.email)}
-                        >
-                          <Trash2 />
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Edit ${lead.email}`}
+                            onClick={() => setEditingLead(lead)}
+                          >
+                            <Pencil />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Remove ${lead.email}`}
+                            onClick={() => handleRemoveMember(lead.id, lead.email)}
+                          >
+                            <Trash2 />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -397,13 +413,26 @@ export function LeadListDetail({ listId }: { listId: number }) {
         }}
       />
 
+      <LeadEditDialog
+        key={editingLead?.id ?? "none"}
+        open={editingLead !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditingLead(null);
+        }}
+        lead={editingLead}
+        onSaved={(updated) => {
+          setMembers((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+          toast.success(`Updated ${updated.email}`);
+        }}
+      />
+
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete lead list?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove <span className="font-medium">{list?.name}</span>. The leads
-              themselves are not deleted.
+              This will permanently remove <span className="font-medium">{list?.name}</span> and the
+              leads that belong only to this list. Leads used by other lists are kept.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

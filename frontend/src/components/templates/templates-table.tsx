@@ -31,8 +31,8 @@ import { TemplatePreviewDialog } from "@/components/templates/template-preview-d
 
 const VARIABLE_RE = /\{\{\s*([\w_.-]+)\s*\}\}/g;
 
-function usedVariables(subject: string, body: string): string[] {
-  const source = `${subject}\n${body}`;
+function usedVariables(subject: string, body: string, footer: string): string[] {
+  const source = [subject, body, footer].filter(Boolean).join("\n");
   const vars = new Set<string>();
   let match: RegExpExecArray | null;
   VARIABLE_RE.lastIndex = 0;
@@ -140,7 +140,7 @@ export function TemplatesTable() {
               </TableHeader>
               <TableBody>
                 {templates.map((template) => {
-                  const variables = usedVariables(template.subject, template.body);
+                  const variables = usedVariables(template.subject, template.body, template.footer ?? "");
                   return (
                     <TableRow key={template.id}>
                       <TableCell className="font-medium">{template.name}</TableCell>
@@ -225,6 +225,7 @@ export function TemplatesTable() {
         title={previewing?.name ?? ""}
         subject={previewing?.subject ?? ""}
         body={previewing?.body ?? ""}
+        footer={previewing?.footer ?? ""}
       />
 
       <AlertDialog

@@ -115,6 +115,23 @@ export async function update(id: number, userId: number, name: string): Promise<
 }
 
 export async function remove(id: number, userId: number): Promise<boolean> {
+  const [listRows] = await pool.query<RowDataPacket[]>(
+    `SELECT id FROM lead_lists WHERE id = ? AND user_id = ? LIMIT 1`,
+    [id, userId]
+  );
+  if (listRows.length === 0) return false;
+
+  await pool.query(
+    `DELETE FROM leads
+     WHERE id IN (
+       SELECT lead_id FROM lead_list_members WHERE lead_list_id = ?
+       AND lead_id NOT IN (
+         SELECT lead_id FROM lead_list_members WHERE lead_list_id <> ?
+       )
+     )`,
+    [id, id]
+  );
+
   const [result] = await pool.query<ResultSetHeader>(
     `DELETE FROM lead_lists WHERE id = ? AND user_id = ?`,
     [id, userId]

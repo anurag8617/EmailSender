@@ -14,6 +14,7 @@ import {
 } from "../types/campaigns";
 import { asyncHandler } from "../utils/asyncHandler";
 import { AppError } from "../utils/AppError";
+import { broadcast } from "../realtime/events";
 
 const EMPTY_COUNTS: CampaignCounts = { leads: 0, sent: 0, failed: 0, bounced: 0, unsubscribed: 0 };
 
@@ -163,6 +164,7 @@ async function transitionCampaign(
   }
 
   const updated = await campaignRepository.transition(campaignId, userId, action);
+  broadcast(userId, { type: "campaign", id: campaign.id, status: updated!.status });
   return buildSummary(updated!);
 }
 
@@ -222,6 +224,7 @@ export const createCampaign = asyncHandler(async (req, res) => {
 
   const campaign = await campaignRepository.findById(id, userId);
   res.status(201).json({ data: await buildDetail(campaign!) });
+  broadcast(userId, { type: "campaign", id, status: campaign!.status });
 });
 
 export const updateCampaign = asyncHandler(async (req, res) => {
@@ -276,6 +279,7 @@ export const deleteCampaign = asyncHandler(async (req, res) => {
   }
 
   await campaignRepository.remove(id, userId);
+  broadcast(userId, { type: "campaign-removed", id });
   res.json({ ok: true });
 });
 
@@ -310,6 +314,12 @@ function pickAccount(accountIds: number[], usage: Map<number, number>): number {
     }
   }
   return best;
+}
+
+const UNSENT_FOR_RESEND = new Set(["CANCELLED", "FAILED", "SKIPPED"]);
+
+function isUnsentForResend(status: string | null): boolean {
+  return !status || UNSENT_FOR_RESEND.has(status);
 }
 
 export const restartCampaign = asyncHandler(async (req, res) => {
@@ -389,4 +399,87 @@ export const restartCampaign = asyncHandler(async (req, res) => {
 
   const updated = await campaignRepository.findById(id, userId);
   res.json({ data: await buildSummary(updated!) });
+});
+
+export const resendUnsentCampaign = asyncHandler(async (req, res) => {
+  const { id } = paramIdSchema.parse(req.params);
+  const input = restartSchema.parse(req.body ?? {});
+  const userId = req.user!.userId;
+
+  const campaign = await campaignRepository.findById(id, userId);
+  if (!campaign) {
+    res.status(404).json({ message: "Campaign not found" });
+    return;
+  }
+  if (campaign.status === "ACTIVE") {
+    res.status(409).json({ message: "Pause the campaign before resending" });
+    return;
+  }
+
+  const [leads, template, activeAccountIds] = await Promise.all([
+    campaignRepository.leadsOfCampaign(id),
+    campaignRepository.templateForCampaign(id),
+    campaignRepository.campaignActiveAccountIds(id),
+  ]);
+
+  const targets = leads.filter((lead) => isUnsentForResend(lead.job_status));
+  if (targets.length === 0) {
+    res.status(400).json({ message: "No unsent emails to resend in this campaign" });
+    return;
+  }
+  if (activeAccountIds.length === 0) {
+    res.status(400).json({
+      message: "Select at least one active sender account before resending",
+    });
+    return;
+  }
+
+  if (input.start_at !== undefined || input.end_at !== undefined) {
+    await campaignRepository.update(id, userId, {
+      start_at: input.start_at ?? null,
+      end_at: input.end_at ?? null,
+    });
+  }
+
+  const baseSchedule = input.start_at
+    ? new Date(input.start_at)
+    : input.scheduled_at
+      ? new Date(input.scheduled_at)
+      : new Date();
+  const usage = new Map<number, number>();
+  const rows: jobRepository.NewJobRow[] = [];
+
+  for (const lead of targets) {
+    if (await suppressionRepository.isSuppressed(lead.email)) {
+      rows.push({
+        campaign_id: id,
+        lead_id: lead.id,
+        email_account_id: null,
+        template_id: template?.id ?? null,
+        scheduled_at: null,
+        status: "SKIPPED",
+        error_message: "lead is suppressed",
+      });
+      continue;
+    }
+    const accountId = pickAccount(activeAccountIds, usage);
+    usage.set(accountId, (usage.get(accountId) ?? 0) + 1);
+    rows.push({
+      campaign_id: id,
+      lead_id: lead.id,
+      email_account_id: accountId,
+      template_id: template?.id ?? null,
+      scheduled_at: new Date(baseSchedule.getTime() + Math.floor(Math.random() * 31) * 1000),
+      status: "PENDING",
+    });
+  }
+
+  if (rows.length > 0) {
+    await jobRepository.insertJobs(rows);
+  }
+
+  await campaignRepository.setCampaignStatus(id, "DRAFT");
+
+  const updated = await campaignRepository.findById(id, userId);
+  res.json({ data: await buildSummary(updated!), rescheduled: rows.length });
 });

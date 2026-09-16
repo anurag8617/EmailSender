@@ -4,14 +4,16 @@ export interface Template {
   name: string;
   subject: string;
   body: string;
+  footer: string | null;
   created_at: string;
   updated_at: string;
 }
 
 export interface TemplateInput {
   name: string;
-  subject: string;
+  subject?: string;
   body: string;
+  footer?: string | null;
 }
 
 export type TemplateUpdate = Partial<TemplateInput>;
@@ -19,8 +21,9 @@ export type TemplateUpdate = Partial<TemplateInput>;
 export interface RenderResult {
   subject: string;
   body: string;
+  footer: string;
   variables: string[];
-  unknown: string[];
+  custom: string[];
   missing: string[];
 }
 
@@ -30,7 +33,9 @@ export const SUPPORTED_VARIABLES: Record<string, string> = {
   company: "Acme Widgets",
   email: "alex@acmewidgets.com",
   website: "acmewidgets.com",
+  phone: "555-0100",
   sender_name: "Your Name",
+  unsubscribe_url: "https://app.example.com/unsubscribe",
 };
 
 export const VARIABLE_NAMES = Object.keys(SUPPORTED_VARIABLES);
@@ -54,17 +59,24 @@ export function replaceVariables(text: string, values: Record<string, string>): 
   });
 }
 
-export function renderTemplate(subject: string, body: string, values?: Record<string, string>): RenderResult {
-  const source = `${subject}\n${body}`;
+export function renderTemplate(
+  subject: string,
+  body: string,
+  footer?: string | null,
+  values?: Record<string, string>
+): RenderResult {
+  const footerText = footer?.trim() ?? "";
+  const source = [subject, body, footerText].filter(Boolean).join("\n");
   const variables = extractVariables(source);
   const sample = values ?? SUPPORTED_VARIABLES;
-  const unknown = variables.filter((variable) => !(variable in SUPPORTED_VARIABLES));
+  const custom = variables.filter((variable) => !(variable in SUPPORTED_VARIABLES));
   const missing = variables.filter((variable) => !(variable in sample));
   return {
     subject: replaceVariables(subject, sample),
     body: replaceVariables(body, sample),
+    footer: footerText ? replaceVariables(footerText, sample) : "",
     variables,
-    unknown,
+    custom,
     missing,
   };
 }

@@ -39,6 +39,53 @@ type CampaignFormDialogProps = {
   onSaved: (campaign: CampaignDetail) => void;
 };
 
+export const CAMPAIGN_FORM_DRAFT_KEY = "campaign-form-draft";
+
+type CampaignDraft = {
+  name: string;
+  startAt: string;
+  endAt: string;
+  dailyLimit: string;
+  hourlyLimit: string;
+  templateId: string;
+  selectedLeadListId: number | null;
+  accountIds: number[];
+};
+
+function loadDraft(): CampaignDraft | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(CAMPAIGN_FORM_DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<CampaignDraft>;
+    if (typeof parsed.name !== "string") return null;
+    return {
+      name: parsed.name ?? "",
+      startAt: parsed.startAt ?? "",
+      endAt: parsed.endAt ?? "",
+      dailyLimit: typeof parsed.dailyLimit === "string" ? parsed.dailyLimit : "50",
+      hourlyLimit: typeof parsed.hourlyLimit === "string" ? parsed.hourlyLimit : "10",
+      templateId: typeof parsed.templateId === "string" ? parsed.templateId : "",
+      selectedLeadListId:
+        typeof parsed.selectedLeadListId === "number" ? parsed.selectedLeadListId : null,
+      accountIds: Array.isArray(parsed.accountIds)
+        ? parsed.accountIds.filter((id): id is number => typeof id === "number")
+        : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+function clearDraft(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(CAMPAIGN_FORM_DRAFT_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 function toInputValue(value: string | null): string {
   if (!value) return "";
   return `${value.replace(" ", "T")}`.slice(0, 16);
@@ -50,17 +97,28 @@ export function CampaignFormDialog({
   campaign,
   onSaved,
 }: CampaignFormDialogProps) {
-  const [name, setName] = useState(campaign?.name ?? "");
-  const [startAt, setStartAt] = useState(toInputValue(campaign?.start_at ?? null));
-  const [endAt, setEndAt] = useState(toInputValue(campaign?.end_at ?? null));
-  const [dailyLimit, setDailyLimit] = useState(String(campaign?.daily_limit ?? 50));
-  const [hourlyLimit, setHourlyLimit] = useState(String(campaign?.hourly_limit ?? 10));
-  const [templateId, setTemplateId] = useState<string>(
-    campaign?.template_id ? String(campaign.template_id) : ""
+  const draft = loadDraft();
+  const [name, setName] = useState(campaign?.name ?? draft?.name ?? "");
+  const [startAt, setStartAt] = useState(
+    campaign ? toInputValue(campaign.start_at ?? null) : (draft?.startAt ?? "")
   );
-  const [selectedLeadListId, setSelectedLeadListId] = useState<number | null>(null);
+  const [endAt, setEndAt] = useState(
+    campaign ? toInputValue(campaign.end_at ?? null) : (draft?.endAt ?? "")
+  );
+  const [dailyLimit, setDailyLimit] = useState(
+    campaign ? String(campaign.daily_limit) : (draft?.dailyLimit ?? "50")
+  );
+  const [hourlyLimit, setHourlyLimit] = useState(
+    campaign ? String(campaign.hourly_limit) : (draft?.hourlyLimit ?? "10")
+  );
+  const [templateId, setTemplateId] = useState<string>(
+    campaign?.template_id ? String(campaign.template_id) : (draft?.templateId ?? "")
+  );
+  const [selectedLeadListId, setSelectedLeadListId] = useState<number | null>(
+    campaign ? null : (draft?.selectedLeadListId ?? null)
+  );
   const [accountIds, setAccountIds] = useState<Set<number>>(
-    () => new Set(campaign?.accounts.map((account) => account.id) ?? [])
+    () => new Set(campaign ? campaign.accounts.map((account) => account.id) : (draft?.accountIds ?? []))
   );
 
   const [accounts, setAccounts] = useState<EmailAccount[]>([]);
@@ -95,6 +153,15 @@ export function CampaignFormDialog({
         }
         if (listsResult.ok && listsResult.data) {
           setLeadLists(listsResult.data.rows);
+          const rows = listsResult.data.rows;
+          const restoredId = (campaign ? null : loadDraft()?.selectedLeadListId) ?? null;
+          if (restoredId !== null) {
+            setSelectedSlot((current) => {
+              if (current) return current;
+              const list = rows.find((item) => item.id === restoredId);
+              return list ? { id: list.id, name: list.name, lead_count: list.lead_count } : current;
+            });
+          }
         }
       }
     );
@@ -102,7 +169,33 @@ export function CampaignFormDialog({
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, campaign]);
+
+  useEffect(() => {
+    if (campaign || !open) return;
+    try {
+      window.sessionStorage.setItem(
+        CAMPAIGN_FORM_DRAFT_KEY,
+        JSON.stringify({
+          name,
+          startAt,
+          endAt,
+          dailyLimit,
+          hourlyLimit,
+          templateId,
+          selectedLeadListId,
+          accountIds: [...accountIds],
+        })
+      );
+    } catch {
+      // ignore
+    }
+  }, [name, startAt, endAt, dailyLimit, hourlyLimit, templateId, selectedLeadListId, accountIds, campaign, open]);
+
+  function handleOpenChange(next: boolean) {
+    if (!next) clearDraft();
+    onOpenChange(next);
+  }
 
   function toggleAccount(id: number) {
     setAccountIds((prev) => {
@@ -176,6 +269,7 @@ export function CampaignFormDialog({
 
     setLoading(false);
     if (result.ok && result.data) {
+      clearDraft();
       onSaved(result.data.data);
       onOpenChange(false);
     } else {
@@ -184,7 +278,7 @@ export function CampaignFormDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{campaign ? "Edit campaign" : "Create campaign"}</DialogTitle>
@@ -392,7 +486,7 @@ export function CampaignFormDialog({
           ) : null}
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={loading}>
               Cancel
             </Button>
             <Button type="submit" disabled={loading || optionsLoading}>

@@ -17,6 +17,7 @@ type TemplatePreviewDialogProps = {
   onOpenChange: (open: boolean) => void;
   subject: string;
   body: string;
+  footer: string;
   title: string;
 };
 
@@ -25,6 +26,7 @@ export function TemplatePreviewDialog({
   onOpenChange,
   subject,
   body,
+  footer,
   title,
 }: TemplatePreviewDialogProps) {
   const [render, setRender] = useState<TemplateRender | null>(null);
@@ -36,7 +38,7 @@ export function TemplatePreviewDialog({
     let cancelled = false;
     apiFetch<{ data: TemplateRender }>("/api/templates/render", {
       method: "POST",
-      body: JSON.stringify({ subject, body }),
+      body: JSON.stringify({ subject, body, footer }),
     }).then(({ ok, data, error }) => {
       if (cancelled) return;
       setLoading(false);
@@ -50,16 +52,17 @@ export function TemplatePreviewDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, subject, body]);
+  }, [open, subject, body, footer]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Preview — {title}</DialogTitle>
-          <DialogDescription>
-            Rendered with sample values. Unknown variables are left untouched and flagged below.
-          </DialogDescription>
+<DialogDescription>
+              Rendered with sample values. Custom variables are filled from each lead&apos;s imported data
+              when the email is sent; if a lead has no value, they render as empty.
+            </DialogDescription>
         </DialogHeader>
 
         {loading ? (
@@ -70,20 +73,30 @@ export function TemplatePreviewDialog({
           </p>
         ) : render ? (
           <div className="grid gap-4">
-            <div className="grid gap-3 overflow-y-auto rounded-lg border bg-muted/40 p-4 max-h-72">
-              <div>
-                <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                  Subject
-                </p>
-                <p className="text-sm font-medium">{render.subject}</p>
+<div className="grid gap-3 overflow-y-auto rounded-lg border bg-muted/40 p-4 max-h-72">
+                <div>
+                  <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                    Subject
+                  </p>
+                  <p className="text-sm font-medium">{render.subject || "(no subject on this lead)"}</p>
+                </div>
+                <div>
+                  <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                    Body
+                  </p>
+                  <pre className="font-sans text-sm whitespace-pre-wrap">{render.body}</pre>
+                </div>
+                {render.footer ? (
+                  <div>
+                    <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                      Footer
+                    </p>
+                    <pre className="font-sans text-sm whitespace-pre-wrap border-t border-dashed border-border pt-3">
+                      {render.footer}
+                    </pre>
+                  </div>
+                ) : null}
               </div>
-              <div>
-                <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                  Body
-                </p>
-                <pre className="font-sans text-sm whitespace-pre-wrap">{render.body}</pre>
-              </div>
-            </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-xs text-muted-foreground">Variables:</span>
               {render.variables.length === 0 ? (
@@ -96,11 +109,13 @@ export function TemplatePreviewDialog({
                 ))
               )}
             </div>
-            {render.unknown.length > 0 ? (
-              <p className="text-sm text-destructive">
-                Unknown variables (won’t be filled):{" "}
-                {render.unknown.map((variable) => `{{${variable}}}`).join(", ")}
-              </p>
+            {render.custom.length > 0 ? (
+              <div className="grid gap-1 text-sm text-amber-600">
+                <p>
+                  Custom variables (filled from imported lead data when available):{" "}
+                  {render.custom.map((variable) => `{{${variable}}}`).join(", ")}
+                </p>
+              </div>
             ) : (
               <p className="text-sm text-emerald-600">All variables are recognized.</p>
             )}

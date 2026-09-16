@@ -4,7 +4,7 @@ import { Template, TemplateInput, TemplateUpdate } from "../types/templates";
 
 interface TemplateRow extends RowDataPacket, Template {}
 
-const SELECT_COLUMNS = `id, user_id, name, subject, body, created_at, updated_at`;
+const SELECT_COLUMNS = `id, user_id, name, subject, body, footer, created_at, updated_at`;
 
 export async function list(userId: number): Promise<Template[]> {
   const [rows] = await pool.query<TemplateRow[]>(
@@ -24,8 +24,8 @@ export async function findById(id: number, userId: number): Promise<Template | n
 
 export async function create(userId: number, input: TemplateInput): Promise<number> {
   const [result] = await pool.query<ResultSetHeader>(
-    `INSERT INTO email_templates (user_id, name, subject, body) VALUES (?, ?, ?, ?)`,
-    [userId, input.name, input.subject, input.body]
+    `INSERT INTO email_templates (user_id, name, subject, body, footer) VALUES (?, ?, ?, ?, ?)`,
+    [userId, input.name, input.subject ?? "", input.body, input.footer ?? null]
   );
   return result.insertId;
 }
@@ -48,6 +48,7 @@ export async function update(
   assignIf("name", input.name);
   assignIf("subject", input.subject);
   assignIf("body", input.body);
+  assignIf("footer", input.footer);
 
   if (sets.length === 0) return true;
 

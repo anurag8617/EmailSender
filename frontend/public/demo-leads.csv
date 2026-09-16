@@ -1,0 +1,6 @@
+first_name,last_name,company,email,website,phone,subject,message
+John,Doe,ABC Plumbing,john.doe@example.com,https://example.com,123456789,Opening hours update,"Hi John, I wanted to reach out regarding your business hours page. It looks like some details might be out of date. Best regards, The Outreach Team"
+Jane,Smith,XYZ Plumbing,jane.smith@example.com,https://xyz.com,987654321,New proposal for XYZ,"Hi Jane, here is a proposal we discussed last week. Let us know if you have any questions. Cheers, The Outreach Team"
+Sam,Rivera,Tech Innovations,sam.rivera@example.com,https://techinnovations.io,555123456,,
+John,Doe,ABC Plumbing,john.doe@example.com,https://example.com,123456789,Opening hours update,"Hi John, this row is intentionally duplicated to test duplicate detection."
+not-an-email,,,,,,,

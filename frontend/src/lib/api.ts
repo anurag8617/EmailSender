@@ -114,6 +114,7 @@ export type Template = {
   name: string;
   subject: string;
   body: string;
+  footer: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -121,8 +122,9 @@ export type Template = {
 export type TemplateRender = {
   subject: string;
   body: string;
+  footer: string;
   variables: string[];
-  unknown: string[];
+  custom: string[];
   missing: string[];
 };
 

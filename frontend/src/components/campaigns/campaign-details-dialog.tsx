@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CalendarDays, RefreshCw, Users } from "lucide-react";
+import { CalendarDays, Loader2, RefreshCw, Send, Users } from "lucide-react";
 import {
   apiFetch,
   type CampaignDetail,
@@ -27,6 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { SendProgress } from "@/components/campaigns/send-progress";
+import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
   DRAFT: "secondary",
@@ -53,6 +54,12 @@ const RECIPIENT_STATUS_VARIANT: Record<string, "default" | "secondary" | "outlin
   CANCELLED: "outline",
   SKIPPED: "outline",
 };
+
+const UNSENT_FOR_RESEND = new Set(["CANCELLED", "FAILED", "SKIPPED"]);
+
+function isUnsentForResend(status: string | null): boolean {
+  return !status || UNSENT_FOR_RESEND.has(status);
+}
 
 function recipientStatusLabel(status: string | null): string {
   if (!status) return "Not scheduled";
@@ -88,6 +95,25 @@ export function CampaignDetailsDialog({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const [resending, setResending] = useState(false);
+  const [resendError, setResendError] = useState<string | null>(null);
+
+  const liveCampaignId = campaign?.id ?? null;
+
+  useRealtimeRefresh(
+    () => {
+      if (open && liveCampaignId) setReload((value) => value + 1);
+    },
+    {
+      enabled: open && liveCampaignId !== null,
+      cooldownMs: 1500,
+      shouldRefresh: (event) => {
+        if (event.type === "job") return event.campaignId === liveCampaignId;
+        if (event.type === "campaign") return event.id === liveCampaignId;
+        return false;
+      },
+    }
+  );
 
   useEffect(() => {
     if (!open || !campaign) return;
@@ -108,6 +134,22 @@ export function CampaignDetailsDialog({
       cancelled = true;
     };
   }, [open, campaign, reload]);
+
+  async function handleResendUnsent() {
+    if (!detail) return;
+    setResending(true);
+    setResendError(null);
+    const result = await apiFetch<{ data: CampaignDetail }>(`/api/campaigns/${detail.id}/resend-unsent`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    setResending(false);
+    if (result.ok) {
+      setReload((value) => value + 1);
+    } else {
+      setResendError(result.error ?? "Failed to resend unsent emails");
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -175,10 +217,11 @@ export function CampaignDetailsDialog({
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7">
               <Stat label="Leads" value={detail.counts.leads} />
               <Stat label="Sent" value={detail.counts.sent} />
               <Stat label="Failed" value={detail.counts.failed} />
+              <Stat label="Not sent" value={detail.leads.filter((lead) => isUnsentForResend(lead.job_status)).length} />
               <Stat label="Bounced" value={detail.counts.bounced} />
               <Stat label="Unsubscribed" value={detail.counts.unsubscribed} />
               <div className="rounded-lg border bg-muted/40 p-3">
@@ -203,13 +246,41 @@ export function CampaignDetailsDialog({
             </div>
 
             <div className="mt-4">
-              <div className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                 <Users className="size-3.5" />
                 Recipients ({detail.leads.length})
                 <span className="text-muted-foreground">
                   · {detail.leads.filter((lead) => lead.job_status === "SENT").length} sent
                 </span>
+                {detail.leads.filter((lead) => isUnsentForResend(lead.job_status)).length > 0 ? (
+                  <span className="text-muted-foreground">
+                    · {detail.leads.filter((lead) => isUnsentForResend(lead.job_status)).length} not sent
+                  </span>
+                ) : null}
+                {detail.status !== "ACTIVE" &&
+                detail.leads.filter((lead) => isUnsentForResend(lead.job_status)).length > 0 ? (
+                  <>
+                    <span className="mx-1 text-border">·</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={resending}
+                      onClick={handleResendUnsent}
+                    >
+                      {resending ? <Loader2 className="animate-spin" /> : <Send />}
+                      {resending
+                        ? "Resending…"
+                        : `Resend to ${detail.leads.filter((lead) => isUnsentForResend(lead.job_status)).length} unsent`}
+                    </Button>
+                  </>
+                ) : null}
               </div>
+              {resendError ? (
+                <p role="alert" className="mb-2 text-sm text-destructive">
+                  {resendError}
+                </p>
+              ) : null}
               <div className="max-h-52 overflow-y-auto rounded-lg border">
                 {detail.leads.length === 0 ? (
                   <p className="p-4 text-center text-sm text-muted-foreground">

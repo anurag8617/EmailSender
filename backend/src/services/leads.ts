@@ -61,8 +61,15 @@ export function suggestMapping(columns: string[]): Record<string, string | null>
   const mapping: Record<string, string | null> = {};
   for (const field of IMPORT_FIELDS) {
     const aliases = FIELD_ALIASES[field.key];
-    const hit = columns.find((column) => aliases.includes(normalizeHeader(column)));
-    mapping[field.key] = hit ?? null;
+    let hit: string | null = null;
+    for (const alias of aliases) {
+      const column = columns.find((c) => normalizeHeader(c) === alias);
+      if (column) {
+        hit = column;
+        break;
+      }
+    }
+    mapping[field.key] = hit;
   }
   return mapping;
 }
@@ -78,7 +85,7 @@ export function parseCsv(buffer: Buffer): Record<string, unknown>[] {
   }) as Record<string, unknown>[];
 }
 
-export function previewCsv(buffer: Buffer, sampleSize = 5) {
+export function previewCsv(buffer: Buffer, sampleSize = 10) {
   const rows = parseCsv(buffer);
   if (rows.length === 0) {
     return { columns: [] as string[], sample: [] as Record<string, string>[], rowCount: 0 };
@@ -185,17 +192,28 @@ export async function runImport(input: {
     }
 
     const message = getCell(row, mapping["message"] ?? "");
-    const { subject, body } = splitEmailText(message);
+    const subjectFromColumn = getCell(row, mapping["subject"] ?? "");
+
+    let subject: string | null;
+    let body: string | null;
+    if (subjectFromColumn !== null) {
+      subject = subjectFromColumn;
+      body = message;
+    } else {
+      const split = splitEmailText(message);
+      subject = split.subject;
+      body = split.body;
+    }
 
     toInsert.push({
       email: emailLower,
       subject,
       message: body,
-      first_name: null,
-      last_name: null,
-      company: null,
-      website: null,
-      phone: null,
+      first_name: getCell(row, mapping["first_name"] ?? ""),
+      last_name: getCell(row, mapping["last_name"] ?? ""),
+      company: getCell(row, mapping["company"] ?? ""),
+      website: getCell(row, mapping["website"] ?? ""),
+      phone: getCell(row, mapping["phone"] ?? ""),
       custom_data: Object.keys(customData).length > 0 ? customData : null,
     });
   }

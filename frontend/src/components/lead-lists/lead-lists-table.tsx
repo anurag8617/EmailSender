@@ -274,8 +274,8 @@ export function LeadListsTable() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete lead list?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove <span className="font-medium">{deleteTarget?.name}</span>. The
-              leads themselves are not deleted.
+              This will permanently remove <span className="font-medium">{deleteTarget?.name}</span> and
+              the leads that belong only to this list. Leads used by other lists are kept.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

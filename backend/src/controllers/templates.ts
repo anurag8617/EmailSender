@@ -5,8 +5,9 @@ import { asyncHandler } from "../utils/asyncHandler";
 
 const templateSchema = z.object({
   name: z.string().trim().min(1).max(255),
-  subject: z.string().trim().min(1).max(255),
+  subject: z.string().trim().max(255).optional(),
   body: z.string().trim().min(1),
+  footer: z.string().trim().max(20000).nullable().optional(),
 });
 
 const templateUpdateSchema = templateSchema.partial();
@@ -14,6 +15,7 @@ const templateUpdateSchema = templateSchema.partial();
 const renderSchema = z.object({
   subject: z.string().optional(),
   body: z.string(),
+  footer: z.string().optional(),
   variables: z.record(z.string(), z.string()).optional(),
 });
 
@@ -43,13 +45,18 @@ export const previewTemplate = asyncHandler(async (req, res) => {
     res.status(404).json({ message: "Template not found" });
     return;
   }
-  res.json({ data: renderTemplate(template.subject, template.body) });
+  res.json({ data: renderTemplate(template.subject, template.body, template.footer) });
 });
 
 export const renderTemplateText = asyncHandler(async (req, res) => {
   const input = renderSchema.parse(req.body);
   res.json({
-    data: renderTemplate(input.subject ?? "", input.body, input.variables ?? undefined),
+    data: renderTemplate(
+      input.subject ?? "",
+      input.body,
+      input.footer ?? null,
+      input.variables ?? undefined
+    ),
   });
 });
 

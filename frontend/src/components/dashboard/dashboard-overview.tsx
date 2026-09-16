@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
   Ban,
@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/table";
 import { SendingIndicator } from "@/components/campaigns/sending-indicator";
 import { SendProgress } from "@/components/campaigns/send-progress";
+import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
   DRAFT: "secondary",
@@ -64,27 +65,35 @@ export function DashboardOverview() {
   const [campaigns, setCampaigns] = useState<CampaignSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const hasLoaded = useRef(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
+  const loadData = useCallback(() => {
+    return Promise.all([
       apiFetch<{ data: DashboardStats }>("/api/dashboard/stats"),
       apiFetch<{ data: CampaignSummary[] }>("/api/campaigns"),
     ]).then(([statsResult, campaignsResult]) => {
-      if (cancelled) return;
-      setLoading(false);
       if (statsResult.ok && statsResult.data && campaignsResult.ok && campaignsResult.data) {
+        hasLoaded.current = true;
         setStats(statsResult.data.data);
         setCampaigns(campaignsResult.data.data);
         setError(null);
-      } else {
+      } else if (!hasLoaded.current) {
         setError(statsResult.error ?? campaignsResult.error ?? "Failed to load dashboard");
       }
+    });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadData().then(() => {
+      if (!cancelled) setLoading(false);
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadData]);
+
+  useRealtimeRefresh(loadData);
 
   if (loading) {
     return (

@@ -9,6 +9,7 @@ import { renderEmail } from "../email/render";
 import { sendEmail, SendError } from "../email/transport";
 import { EmailServerCredentials } from "../types/emailAccounts";
 import { MAX_ATTEMPTS, retryDelayMs } from "../types/jobs";
+import { broadcast } from "../realtime/events";
 
 const LOCK_NAME = "email_tool_sending_engine";
 const LEADS_PER_TICK_PER_CAMPAIGN = 50;
@@ -65,10 +66,25 @@ async function campaignWindowState(campaign: {
   return { within: dayAllowed && timeAllowed, ended: false, startAt };
 }
 
-async function retryOrFail(jobId: number, attempts: number, error: string, leadId: number): Promise<void> {
+async function retryOrFail(
+  jobId: number,
+  attempts: number,
+  error: string,
+  job: { lead_id: number; campaign_id: number; campaign_user_id: number; lead_email: string; email_account_id: number | null }
+): Promise<void> {
   if (attempts >= MAX_ATTEMPTS) {
     await jobRepo.markFailed(jobId, error);
-    await jobRepo.recordEvent(jobId, leadId, "FAILED", null, { error });
+    await jobRepo.recordEvent(jobId, job.lead_id, "FAILED", null, { error });
+    broadcast(job.campaign_user_id, {
+      type: "job",
+      campaignId: job.campaign_id,
+      jobId,
+      status: "FAILED",
+      accountId: job.email_account_id,
+      leadId: job.lead_id,
+      leadEmail: job.lead_email,
+      error,
+    });
     return;
   }
   await jobRepo.requeue(jobId, new Date(Date.now() + retryDelayMs(attempts)), error);
@@ -170,12 +186,41 @@ async function processJob(
   if (!EMAIL_RE.test(job.lead_email)) {
     await jobRepo.markFailed(jobId, "permanent: invalid recipient email");
     await jobRepo.recordEvent(jobId, job.lead_id, "FAILED", null, { error: "invalid recipient email" });
+    broadcast(job.campaign_user_id, {
+      type: "job",
+      campaignId: job.campaign_id,
+      jobId,
+      status: "FAILED",
+      accountId: job.email_account_id,
+      leadId: job.lead_id,
+      leadEmail: job.lead_email,
+      error: "invalid recipient email",
+    });
     return;
   }
 
   if (await suppressionRepo.isSuppressed(job.lead_email)) {
     await jobRepo.skip(jobId, "lead is suppressed");
+    broadcast(job.campaign_user_id, {
+      type: "job",
+      campaignId: job.campaign_id,
+      jobId,
+      status: "SKIPPED",
+      accountId: job.email_account_id,
+      leadId: job.lead_id,
+      leadEmail: job.lead_email,
+      error: "lead is suppressed",
+    });
     return;
+  }
+
+  let customData: Record<string, unknown> | null = null;
+  if (job.lead_custom_data) {
+    try {
+      customData = JSON.parse(job.lead_custom_data);
+    } catch {
+      customData = null;
+    }
   }
 
   const leadContext = {
@@ -184,19 +229,22 @@ async function processJob(
     company: job.lead_company,
     email: job.lead_email,
     website: job.lead_website,
+    phone: job.lead_phone,
+    custom_data: customData,
   };
 
   let rendered: ReturnType<typeof renderEmail> | null = null;
-  if (job.lead_subject || job.lead_message) {
+  const subject =
+    (job.lead_subject ?? "").trim() ||
+    (job.template_subject ?? "").trim() ||
+    "";
+  const body =
+    (job.lead_message ?? "").trim() ||
+    (job.template_body ?? "").trim() ||
+    "";
+  if (subject || body || job.template_footer) {
     rendered = renderEmail(
-      { subject: job.lead_subject ?? "", body: job.lead_message ?? "" },
-      leadContext,
-      account.email,
-      job.campaign_id
-    );
-  } else if (job.template_subject && job.template_body) {
-    rendered = renderEmail(
-      { subject: job.template_subject, body: job.template_body },
+      { subject, body, footer: job.template_footer ?? null },
       leadContext,
       account.email,
       job.campaign_id
@@ -205,6 +253,16 @@ async function processJob(
   if (!rendered) {
     await jobRepo.markFailed(jobId, "permanent: lead has no email message and campaign has no email template");
     await jobRepo.recordEvent(jobId, job.lead_id, "FAILED", null, { error: "no template or message" });
+    broadcast(job.campaign_user_id, {
+      type: "job",
+      campaignId: job.campaign_id,
+      jobId,
+      status: "FAILED",
+      accountId: job.email_account_id,
+      leadId: job.lead_id,
+      leadEmail: job.lead_email,
+      error: "no template or message",
+    });
     return;
   }
 
@@ -250,6 +308,16 @@ async function processJob(
     await jobRepo.incrementAccountSentToday(account.id);
     await jobRepo.recordEvent(jobId, job.lead_id, "SENT", result.messageId, null);
     authFailureCounts.set(account.id, 0);
+    broadcast(job.campaign_user_id, {
+      type: "job",
+      campaignId: job.campaign_id,
+      jobId,
+      status: "SENT",
+      accountId: job.email_account_id,
+      leadId: job.lead_id,
+      leadEmail: job.lead_email,
+      sentAt: new Date().toISOString(),
+    });
   } catch (error) {
     const send = error as SendError;
     if (send.kind === "auth") {
@@ -257,16 +325,21 @@ async function processJob(
       authFailureCounts.set(account.id, failures);
       if (failures >= 3) {
         await accountRepo.setStatusById(account.id, "disabled");
+        broadcast(job.campaign_user_id, {
+          type: "account",
+          id: account.id,
+          status: "disabled",
+        });
       }
-      await retryOrFail(jobId, job.attempts, send.message, job.lead_id);
+      await retryOrFail(jobId, job.attempts, send.message, job);
     } else if (send.kind === "invalid_recipient") {
-      await retryOrFail(jobId, MAX_ATTEMPTS, send.message, job.lead_id);
+      await retryOrFail(jobId, MAX_ATTEMPTS, send.message, job);
       await jobRepo.recordEvent(jobId, job.lead_id, "BOUNCED", null, { kind: "hard" });
       await suppressionRepo.addSuppression(job.lead_email, "BOUNCED", "smtp_error");
     } else if (send.kind === "permanent") {
-      await retryOrFail(jobId, MAX_ATTEMPTS, send.message, job.lead_id);
+      await retryOrFail(jobId, MAX_ATTEMPTS, send.message, job);
     } else {
-      await retryOrFail(jobId, job.attempts, send.message, job.lead_id);
+      await retryOrFail(jobId, job.attempts, send.message, job);
     }
   }
 }
@@ -328,11 +401,21 @@ async function finalizeCampaigns(): Promise<void> {
       );
       await jobRepo.canceledPending(campaign.id);
       await campaignRepo.setCampaignStatus(campaign.id, "COMPLETED");
+      broadcast(campaign.user_id, {
+        type: "campaign",
+        id: campaign.id,
+        status: "COMPLETED",
+      });
       continue;
     }
 
     if (unfinished === 0 && leadCount > 0 && jobCount >= leadCount) {
       await campaignRepo.setCampaignStatus(campaign.id, "COMPLETED");
+      broadcast(campaign.user_id, {
+        type: "campaign",
+        id: campaign.id,
+        status: "COMPLETED",
+      });
     }
   }
 }

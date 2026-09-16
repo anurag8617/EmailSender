@@ -3,6 +3,7 @@ import * as emailAccountRepository from "../repositories/emailAccounts";
 import { testSmtpConnection, TestConnectionError, toPublic } from "../services/emailAccounts";
 import { asyncHandler } from "../utils/asyncHandler";
 import { resolveSecureCredentials } from "../utils/smtp";
+import { broadcast } from "../realtime/events";
 
 const credentialsSchema = z.object({
   host: z.string().trim().min(1).max(255),
@@ -75,6 +76,7 @@ export const createAccount = asyncHandler(async (req, res) => {
   });
 
   const account = await publicAccount(id, userId);
+  broadcast(userId, { type: "account", id, status: account!.status });
   res.status(201).json({ data: account });
 });
 
@@ -109,6 +111,7 @@ export const updateAccount = asyncHandler(async (req, res) => {
   });
 
   const account = await publicAccount(id, userId);
+  broadcast(userId, { type: "account", id, status: account!.status });
   res.json({ data: account });
 });
 
@@ -119,6 +122,7 @@ export const deleteAccount = asyncHandler(async (req, res) => {
     res.status(404).json({ message: "Email account not found" });
     return;
   }
+  broadcast(req.user!.userId, { type: "account-removed", id });
   res.json({ ok: true });
 });
 
@@ -132,6 +136,7 @@ export const setAccountStatus = (status: "active" | "disabled") =>
       return;
     }
     const account = await publicAccount(id, userId);
+    broadcast(userId, { type: "account", id, status: account!.status });
     res.json({ data: account });
   });
 
@@ -153,6 +158,7 @@ export const testAccount = asyncHandler(async (req, res) => {
     if (error instanceof TestConnectionError) {
       if (error.authFailure) {
         await emailAccountRepository.setStatus(id, userId, "disabled");
+        broadcast(userId, { type: "account", id, status: "disabled" });
       }
       res.status(400).json({ message: error.message, authFailure: error.authFailure });
       return;

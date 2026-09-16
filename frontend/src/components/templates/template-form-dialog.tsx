@@ -15,6 +15,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { TemplatePreviewDialog } from "@/components/templates/template-preview-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type TemplateFormDialogProps = {
   open: boolean;
@@ -23,7 +30,8 @@ type TemplateFormDialogProps = {
   onSaved: (template: Template) => void;
 };
 
-type FormState = { name: string; subject: string; body: string };
+type FormState = { name: string; subject: string; body: string; footer: string };
+type InsertTarget = "body" | "footer";
 
 const SUPPORTED = [
   "first_name",
@@ -31,8 +39,13 @@ const SUPPORTED = [
   "company",
   "email",
   "website",
+  "phone",
   "sender_name",
+  "unsubscribe_url",
 ];
+
+const DEFAULT_FOOTER =
+  "Best regards,\n{{sender_name}}\n{{company}}\n\nUnsubscribe: {{unsubscribe_url}}";
 
 export function TemplateFormDialog({
   open,
@@ -44,18 +57,20 @@ export function TemplateFormDialog({
     name: template?.name ?? "",
     subject: template?.subject ?? "",
     body: template?.body ?? "",
+    footer: template?.footer ?? DEFAULT_FOOTER,
   }));
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [insertVar, setInsertVar] = useState(SUPPORTED[0]);
+  const [insertTarget, setInsertTarget] = useState<InsertTarget>("body");
 
   function set(key: keyof FormState, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
   function insertVariable() {
-    setForm((prev) => ({ ...prev, body: `${prev.body}{{${insertVar}}}` }));
+    setForm((prev) => ({ ...prev, [insertTarget]: `${prev[insertTarget]}{{${insertVar}}}` }));
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -107,31 +122,39 @@ export function TemplateFormDialog({
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="template-subject" className="after:ml-0.5 after:text-destructive after:content-['*']">
-                Subject
-              </Label>
+              <Label htmlFor="template-subject">Subject</Label>
               <Input
                 id="template-subject"
-                required
                 maxLength={255}
                 value={form.subject}
                 onChange={(e) => set("subject", e.target.value)}
-                placeholder="Quick question for {{first_name}}"
+                placeholder="Optional — used only when a lead has no subject"
               />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="template-insert-variable">Insert variable</Label>
               <p className="mb-2 text-xs text-muted-foreground">
-                Pick a variable and append it to the bottom of your body, then replace the placeholder
-                in place if needed.
+                Pick a variable and a destination (body or footer), then replace the placeholder in
+                place if needed.
               </p>
               <div className="grid grid-cols-[1fr_auto] gap-3">
-                <Input
-                  id="template-insert-variable"
-                  list="template-variables"
-                  value={insertVar}
-                  onChange={(e) => setInsertVar(e.target.value)}
-                />
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    id="template-insert-variable"
+                    list="template-variables"
+                    value={insertVar}
+                    onChange={(e) => setInsertVar(e.target.value)}
+                  />
+                  <Select value={insertTarget} onValueChange={(value) => setInsertTarget(value as InsertTarget)}>
+                    <SelectTrigger id="template-insert-target" aria-label="Insert destination">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="body">Into body</SelectItem>
+                      <SelectItem value="footer">Into footer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <datalist id="template-variables">
                   {SUPPORTED.map((variable) => (
                     <option key={variable} value={variable}>
@@ -151,10 +174,24 @@ export function TemplateFormDialog({
               <Textarea
                 id="template-body"
                 required
-                rows={10}
+                rows={8}
                 value={form.body}
                 onChange={(e) => set("body", e.target.value)}
                 placeholder={"Hi {{first_name}},\n\nI noticed {{company}}…"}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="template-footer">Footer (optional)</Label>
+              <p className="mb-2 text-xs text-muted-foreground">
+                Appended to every email from this template. {`{{unsubscribe_url}}`}, {"{{sender_name}}"} and
+                other variables work here.
+              </p>
+              <Textarea
+                id="template-footer"
+                rows={4}
+                value={form.footer}
+                onChange={(e) => set("footer", e.target.value)}
+                placeholder={DEFAULT_FOOTER}
               />
             </div>
 
@@ -168,7 +205,7 @@ export function TemplateFormDialog({
               <Button
                 type="button"
                 variant="outline"
-                disabled={!form.subject.trim() || !form.body.trim()}
+                disabled={!form.body.trim()}
                 onClick={() => setPreviewOpen(true)}
               >
                 Preview
@@ -190,6 +227,7 @@ export function TemplateFormDialog({
         title={form.name || "Draft"}
         subject={form.subject}
         body={form.body}
+        footer={form.footer}
       />
     </>
   );
