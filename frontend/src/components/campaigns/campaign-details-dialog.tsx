@@ -211,7 +211,11 @@ export function CampaignDetailsDialog({
                 <div className="min-w-0">
                   <p className="text-xs text-muted-foreground">Schedule</p>
                   <p className="truncate text-sm font-medium">
-                    {formatDateTime(detail.start_at)} → {formatDateTime(detail.end_at)}
+                    {detail.end_at
+                      ? `${formatDateTime(detail.start_at)} → ${formatDateTime(detail.end_at)}`
+                      : detail.start_at
+                      ? `Starts: ${formatDateTime(detail.start_at)}`
+                      : "Immediate"}
                   </p>
                 </div>
               </div>

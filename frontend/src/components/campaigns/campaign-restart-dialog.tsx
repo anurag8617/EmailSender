@@ -37,7 +37,6 @@ export function CampaignRestartDialog({
   onRestarted,
 }: CampaignRestartDialogProps) {
   const [startAt, setStartAt] = useState(() => datetimeLocalNow(60_000));
-  const [endAt, setEndAt] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,12 +46,11 @@ export function CampaignRestartDialog({
     setError(null);
     setLoading(true);
 
-    const payload: Record<string, unknown> = {};
+    const payload: Record<string, unknown> = {
+      end_at: null,
+    };
     if (startAt.trim()) {
       payload.start_at = startAt.replace("T", " ");
-    }
-    if (endAt.trim()) {
-      payload.end_at = endAt.replace("T", " ");
     }
 
     const result = await apiFetch(`/api/campaigns/${campaign.id}/restart`, {
@@ -62,14 +60,11 @@ export function CampaignRestartDialog({
 
     setLoading(false);
     if (result.ok) {
-      const parts: string[] = [];
-      if (startAt.trim()) parts.push(`Start: ${new Date(startAt).toLocaleString()}`);
-      if (endAt.trim()) parts.push(`End: ${new Date(endAt).toLocaleString()}`);
-      const when = parts.length
-        ? parts.join(" · ")
-        : "no schedule window — sending as soon as possible";
+      const when = startAt.trim()
+        ? `Start: ${new Date(startAt).toLocaleString()}`
+        : "sending as soon as possible";
       onOpenChange(false);
-      onRestarted(`Campaign "${campaign.name}" restarted — ${when}. Sending starts automatically.`);
+      onRestarted(`Campaign "${campaign.name}" restarted (${when}). Sending starts automatically.`);
     } else {
       setError(result.error ?? "Failed to restart campaign");
     }
@@ -100,19 +95,6 @@ export function CampaignRestartDialog({
             />
             <p className="text-xs text-muted-foreground">
               When sending begins. Leave empty to send as soon as possible.
-            </p>
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="restart-end">Schedule end</Label>
-            <Input
-              id="restart-end"
-              type="datetime-local"
-              value={endAt}
-              onChange={(e) => setEndAt(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Optional. When sending window closes. Must be after the start time.
             </p>
           </div>
 

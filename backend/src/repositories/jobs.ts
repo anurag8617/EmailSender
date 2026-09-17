@@ -90,6 +90,8 @@ export interface ProcessingJob extends EmailJob {
   campaign_user_id: number;
   campaign_start_at: string | null;
   campaign_end_at: string | null;
+  campaign_daily_limit: number;
+  campaign_hourly_limit: number;
   lead_email: string;
   lead_first_name: string | null;
   lead_last_name: string | null;
@@ -105,6 +107,9 @@ export interface ProcessingJob extends EmailJob {
   template_body: string | null;
   template_footer: string | null;
   account_email: string | null;
+  account_daily_limit: number | null;
+  account_hourly_limit: number | null;
+  account_sent_today: number | null;
 }
 
 interface ProcessingJobRow extends RowDataPacket, ProcessingJob {}
@@ -116,12 +121,15 @@ export async function processingById(jobId: number): Promise<ProcessingJob | nul
             ej.sent_at, ej.failed_at, ej.created_at, ej.updated_at,
             c.status AS campaign_status, c.user_id AS campaign_user_id,
             c.start_at AS campaign_start_at, c.end_at AS campaign_end_at,
+            c.daily_limit AS campaign_daily_limit, c.hourly_limit AS campaign_hourly_limit,
             l.email AS lead_email, l.first_name AS lead_first_name, l.last_name AS lead_last_name,
             l.company AS lead_company, l.website AS lead_website, l.phone AS lead_phone,
             l.custom_data AS lead_custom_data,
             l.subject AS lead_subject, l.message AS lead_message,
             t.subject AS template_subject, t.body AS template_body, t.footer AS template_footer, t.name AS template_name,
-            ea.email AS account_email
+            ea.email AS account_email,
+            ea.daily_limit AS account_daily_limit, ea.hourly_limit AS account_hourly_limit,
+            ea.sent_today AS account_sent_today
        FROM email_jobs ej
        JOIN campaigns c ON c.id = ej.campaign_id
        JOIN leads l ON l.id = ej.lead_id
@@ -159,6 +167,15 @@ export async function requeue(jobId: number, scheduledAt: Date, error?: string):
             attempts = attempts + 1, updated_at = NOW()
       WHERE id = ?`,
     [scheduledAt, error ?? null, jobId]
+  );
+}
+
+export async function reschedule(jobId: number, scheduledAt: Date, reason?: string): Promise<void> {
+  await pool.query<ResultSetHeader>(
+    `UPDATE email_jobs
+        SET status = 'PENDING', scheduled_at = ?, error_message = ?, updated_at = NOW()
+      WHERE id = ?`,
+    [scheduledAt, reason ?? null, jobId]
   );
 }
 

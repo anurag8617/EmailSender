@@ -38,7 +38,7 @@ const TIMEOUT_MS = 20_000;
 function listUnsubscribeSafe(url: string): boolean {
   try {
     const parsed = new URL(url);
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
+    if (parsed.protocol !== "https:") return false;
     const host = parsed.hostname.toLowerCase();
     if (host === "localhost" || host.endsWith(".localhost")) return false;
     if (host === "127.0.0.1" || host === "::1") return false;

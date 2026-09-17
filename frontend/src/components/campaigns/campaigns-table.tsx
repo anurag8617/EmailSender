@@ -242,7 +242,11 @@ export function CampaignsTable() {
                       <div className="font-medium">{campaign.name}</div>
                       <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
                         <CalendarDays />
-                        {formatDateTime(campaign.start_at)} → {formatDateTime(campaign.end_at)}
+                        {campaign.end_at
+                          ? `${formatDateTime(campaign.start_at)} → ${formatDateTime(campaign.end_at)}`
+                          : campaign.start_at
+                          ? `Starts: ${formatDateTime(campaign.start_at)}`
+                          : "Immediate"}
                       </div>
                     </TableCell>
                     <TableCell>

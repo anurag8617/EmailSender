@@ -41,10 +41,9 @@ type CampaignFormDialogProps = {
 
 export const CAMPAIGN_FORM_DRAFT_KEY = "campaign-form-draft";
 
-type CampaignDraft = {
+export type CampaignDraft = {
   name: string;
   startAt: string;
-  endAt: string;
   dailyLimit: string;
   hourlyLimit: string;
   templateId: string;
@@ -62,7 +61,6 @@ function loadDraft(): CampaignDraft | null {
     return {
       name: parsed.name ?? "",
       startAt: parsed.startAt ?? "",
-      endAt: parsed.endAt ?? "",
       dailyLimit: typeof parsed.dailyLimit === "string" ? parsed.dailyLimit : "50",
       hourlyLimit: typeof parsed.hourlyLimit === "string" ? parsed.hourlyLimit : "10",
       templateId: typeof parsed.templateId === "string" ? parsed.templateId : "",
@@ -109,9 +107,6 @@ export function CampaignFormDialog({
   const [name, setName] = useState(campaign?.name ?? draft?.name ?? "");
   const [startAt, setStartAt] = useState(
     campaign ? toInputValue(campaign.start_at ?? null) : (draft?.startAt ?? datetimeLocalNow())
-  );
-  const [endAt, setEndAt] = useState(
-    campaign ? toInputValue(campaign.end_at ?? null) : (draft?.endAt ?? "")
   );
   const [dailyLimit, setDailyLimit] = useState(
     campaign ? String(campaign.daily_limit) : (draft?.dailyLimit ?? "50")
@@ -187,7 +182,6 @@ export function CampaignFormDialog({
         JSON.stringify({
           name,
           startAt,
-          endAt,
           dailyLimit,
           hourlyLimit,
           templateId,
@@ -198,7 +192,7 @@ export function CampaignFormDialog({
     } catch {
       // ignore
     }
-  }, [name, startAt, endAt, dailyLimit, hourlyLimit, templateId, selectedLeadListId, accountIds, campaign, open]);
+  }, [name, startAt, dailyLimit, hourlyLimit, templateId, selectedLeadListId, accountIds, campaign, open]);
 
   function handleOpenChange(next: boolean) {
     if (!next) clearDraft();
@@ -245,11 +239,6 @@ export function CampaignFormDialog({
     event.preventDefault();
     setError(null);
 
-    if (startAt.trim() && endAt.trim() && new Date(endAt) <= new Date(startAt)) {
-      setError("Schedule end must be after the start time");
-      return;
-    }
-
     if (!selectedLeadListId && !campaign) {
       setError("Select a lead list before saving the campaign");
       return;
@@ -260,7 +249,7 @@ export function CampaignFormDialog({
     const payload: Record<string, unknown> = {
       name,
       start_at: startAt || null,
-      end_at: endAt || null,
+      end_at: null,
       daily_limit: Number(dailyLimit),
       hourly_limit: Number(hourlyLimit),
       template_id: templateId ? Number(templateId) : null,
@@ -404,29 +393,18 @@ export function CampaignFormDialog({
             </p>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="campaign-start">Schedule start</Label>
-              <Input
-                id="campaign-start"
-                type="datetime-local"
-                value={startAt}
-                onChange={(e) => setStartAt(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Campaign starts sending automatically once this time is reached. Leave empty to
-                begin immediately.
-              </p>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="campaign-end">Schedule end</Label>
-              <Input
-                id="campaign-end"
-                type="datetime-local"
-                value={endAt}
-                onChange={(e) => setEndAt(e.target.value)}
-              />
-            </div>
+          <div className="grid gap-2">
+            <Label htmlFor="campaign-start">Schedule start</Label>
+            <Input
+              id="campaign-start"
+              type="datetime-local"
+              value={startAt}
+              onChange={(e) => setStartAt(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Campaign starts sending automatically once this time is reached. Leave empty to
+              begin immediately. The campaign will run until all recipients have been contacted.
+            </p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">

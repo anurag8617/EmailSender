@@ -34,6 +34,7 @@ export const SUPPORTED_VARIABLES: Record<string, string> = {
   email: "alex@acmewidgets.com",
   website: "acmewidgets.com",
   phone: "555-0100",
+  sender: "Your Name",
   sender_name: "Your Name",
   unsubscribe_url: "https://app.example.com/unsubscribe",
 };
@@ -53,9 +54,31 @@ export function extractVariables(text: string): string[] {
 }
 
 export function replaceVariables(text: string, values: Record<string, string>): string {
-  return text.replace(VARIABLE_RE, (full, raw: string) => {
-    const key = String(raw).trim();
-    return key in values ? values[key] : full;
+  const normalized: Record<string, string> = {};
+  for (const [k, v] of Object.entries(values)) {
+    const val = String(v ?? "");
+    normalized[k.toLowerCase()] = val;
+    normalized[k.toLowerCase().replace(/[_-]/g, "")] = val;
+  }
+
+  // Aliases
+  if (normalized.sender_name && !normalized.sender) {
+    normalized.sender = normalized.sender_name;
+  }
+  if (normalized.sender && !normalized.sender_name) {
+    normalized.sender_name = normalized.sender;
+  }
+  if (normalized.first_name && !normalized.name) {
+    normalized.name = normalized.first_name;
+  }
+
+  return text.replace(VARIABLE_RE, (_full, raw: string) => {
+    const key = String(raw).trim().toLowerCase();
+    const stripped = key.replace(/[_-]/g, "");
+    if (key in normalized) return normalized[key];
+    if (stripped in normalized) return normalized[stripped];
+    // If unknown variable, do NOT leave raw {{tag}} which triggers spam filters
+    return "";
   });
 }
 

@@ -13,16 +13,30 @@ import { broadcast } from "../realtime/events";
 
 const LOCK_NAME = "email_tool_sending_engine";
 const LEADS_PER_TICK_PER_CAMPAIGN = 50;
-const JOBS_PER_ACCOUNT_PER_TICK = 10;
+const JOBS_PER_ACCOUNT_PER_TICK = 1;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const authFailureCounts = new Map<number, number>();
+const accountCooldownUntil = new Map<number, number>();
 
-function jitteredNow(): Date {
-  const jitterSeconds = Math.floor(Math.random() * 31);
-  return new Date(Date.now() + jitterSeconds * 1000);
+function getSendDelayRange(): { minMs: number; maxMs: number } {
+  const minSeconds = process.env.EMAIL_SEND_DELAY_MIN
+    ? Number(process.env.EMAIL_SEND_DELAY_MIN)
+    : 30;
+  const maxSeconds = process.env.EMAIL_SEND_DELAY_MAX
+    ? Number(process.env.EMAIL_SEND_DELAY_MAX)
+    : 60;
+  const minMs = Math.max(5_000, (Number.isNaN(minSeconds) ? 30 : minSeconds) * 1000);
+  const maxMs = Math.max(minMs, (Number.isNaN(maxSeconds) ? 60 : maxSeconds) * 1000);
+  return { minMs, maxMs };
 }
+
+function nextRandomDelayMs(): number {
+  const { minMs, maxMs } = getSendDelayRange();
+  return minMs + Math.floor(Math.random() * (maxMs - minMs + 1));
+}
+
 
 function pickAccount(accountIds: number[], usage: Map<number, number>): number {
   let best = accountIds[0];
@@ -38,11 +52,48 @@ function pickAccount(accountIds: number[], usage: Map<number, number>): number {
 }
 
 function displayNameFromEmail(email: string): string {
-  return email
-    .split("@")[0]
+  const local = email.split("@")[0];
+  const clean = local.replace(/\d+$/, "");
+  const base = clean.length > 1 ? clean : local;
+  return base
     .split(/[._-]+/)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
     .join(" ");
+}
+
+function getTomorrowStart(startTime?: string | null): Date {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  if (startTime) {
+    const [h, m] = startTime.split(":").map(Number);
+    tomorrow.setHours(h || 0, m || 0, 0, 0);
+  } else {
+    tomorrow.setHours(0, 5, 0, 0); // 00:05 AM tomorrow
+  }
+  return tomorrow;
+}
+
+async function getAccountEffectiveLimits(account: { id: number; daily_limit: number; hourly_limit: number }) {
+  const window = await sendingLimitsRepo.windowFor("account", account.id);
+  let daily = account.daily_limit;
+  let hourly = account.hourly_limit;
+  if (window) {
+    if (window.daily_limit) daily = Math.min(daily, window.daily_limit);
+    if (window.hourly_limit) hourly = Math.min(hourly, window.hourly_limit);
+  }
+  return { daily, hourly, window };
+}
+
+async function getCampaignEffectiveLimits(campaign: { id: number; daily_limit: number; hourly_limit: number }) {
+  const window = await sendingLimitsRepo.windowFor("campaign", campaign.id);
+  let daily = campaign.daily_limit;
+  let hourly = campaign.hourly_limit;
+  if (window) {
+    if (window.daily_limit) daily = Math.min(daily, window.daily_limit);
+    if (window.hourly_limit) hourly = Math.min(hourly, window.hourly_limit);
+  }
+  return { daily, hourly, window };
 }
 
 interface WindowState {
@@ -113,22 +164,38 @@ async function generateJobs(): Promise<void> {
     ]);
     if (accountIds.length === 0) continue;
 
-    const sendingWindow = await sendingLimitsRepo.windowFor("campaign", campaign.id);
-    let dailyCap = campaign.daily_limit;
-    let hourlyCap = campaign.hourly_limit;
-    if (sendingWindow) {
-      if (sendingWindow.daily_limit) dailyCap = Math.min(dailyCap, sendingWindow.daily_limit);
-      if (sendingWindow.hourly_limit) hourlyCap = Math.min(hourlyCap, sendingWindow.hourly_limit);
-    }
-    const capacity = Math.min(dailyCap - sentToday, hourlyCap - sentThisHour);
+    const campaignLimits = await getCampaignEffectiveLimits(campaign);
+    const campaignDailyRemaining = campaignLimits.daily - sentToday;
+    const campaignHourlyRemaining = campaignLimits.hourly - sentThisHour;
+    const capacity = Math.min(campaignDailyRemaining, campaignHourlyRemaining);
     if (capacity <= 0) continue;
+
+    // Filter to ONLY accounts that have both daily and hourly sending capacity remaining today
+    const availableAccountIds: number[] = [];
+    for (const id of accountIds) {
+      const account = await accountRepo.accountById(id);
+      if (!account || account.status !== "active") continue;
+      const [accSentToday, accSentHour] = await Promise.all([
+        jobRepo.sentTodayForAccount(id),
+        jobRepo.sentThisHourForAccount(id),
+      ]);
+      const accLimits = await getAccountEffectiveLimits(account);
+      const accDailyRemaining = accLimits.daily - Math.max(accSentToday, account.sent_today);
+      const accHourlyRemaining = accLimits.hourly - accSentHour;
+      if (accDailyRemaining > 0 && accHourlyRemaining > 0) {
+        availableAccountIds.push(id);
+      }
+    }
+
+    if (availableAccountIds.length === 0) continue;
 
     const amount = Math.min(capacity, LEADS_PER_TICK_PER_CAMPAIGN);
     const leads = await campaignRepo.campaignLeadsToSchedule(campaign.id, amount);
     if (leads.length === 0) continue;
 
-    const usage = await campaignRepo.accountJobCounts(campaign.id, accountIds);
+    const usage = await campaignRepo.accountJobCounts(campaign.id, availableAccountIds);
     const rows: jobRepo.NewJobRow[] = [];
+    const accountNextOffset = new Map<number, number>();
 
     for (const lead of leads) {
       if (await suppressionRepo.isSuppressed(lead.email)) {
@@ -143,14 +210,19 @@ async function generateJobs(): Promise<void> {
         });
         continue;
       }
-      const accountId = pickAccount(accountIds, usage);
+      const accountId = pickAccount(availableAccountIds, usage);
       usage.set(accountId, (usage.get(accountId) ?? 0) + 1);
+
+      const currentOffset = accountNextOffset.get(accountId) ?? 0;
+      const stepMs = nextRandomDelayMs();
+      accountNextOffset.set(accountId, currentOffset + stepMs);
+
       rows.push({
         campaign_id: campaign.id,
         lead_id: lead.lead_id,
         email_account_id: accountId,
         template_id: template?.id ?? null,
-        scheduled_at: jitteredNow(),
+        scheduled_at: new Date(Date.now() + currentOffset),
         status: "PENDING",
       });
     }
@@ -250,11 +322,16 @@ async function processJob(
     (job.lead_message ?? "").trim() ||
     (job.template_body ?? "").trim() ||
     "";
+  const senderEmail = EMAIL_RE.test(credentials.username)
+    ? credentials.username
+    : account.email;
+  const senderDisplayName = displayNameFromEmail(senderEmail);
+
   if (subject || body || job.template_footer) {
     rendered = renderEmail(
       { subject, body, footer: job.template_footer ?? null },
       leadContext,
-      account.email,
+      senderDisplayName,
       job.campaign_id
     );
   }
@@ -285,13 +362,14 @@ async function processJob(
   }
   if (!windowState.within) {
     const holdUntil = windowState.startAt ?? new Date(Date.now() + retryDelayMs(job.attempts));
-    await jobRepo.requeue(jobId, holdUntil, "outside campaign sending window");
+    await jobRepo.reschedule(jobId, holdUntil, "outside campaign sending window");
     return;
   }
 
   const sendingWindow = await sendingLimitsRepo.windowFor("campaign", job.campaign_id);
   if (!sendingLimitsRepo.isInsideWeekdayWindow(sendingWindow?.allowed_weekdays ?? null)) {
-    await jobRepo.requeue(jobId, new Date(Date.now() + retryDelayMs(job.attempts)), "outside allowed weekdays");
+    const tomorrow = getTomorrowStart(sendingWindow?.start_time);
+    await jobRepo.reschedule(jobId, tomorrow, "outside allowed weekdays");
     return;
   }
   if (
@@ -300,17 +378,58 @@ async function processJob(
       sendingWindow?.end_time ?? null
     )
   ) {
-    await jobRepo.requeue(jobId, new Date(Date.now() + retryDelayMs(job.attempts)), "outside allowed hours");
+    const holdUntil = new Date(Date.now() + 15 * 60 * 1000);
+    await jobRepo.reschedule(jobId, holdUntil, "outside allowed hours");
+    return;
+  }
+
+  // Double-check Account daily and hourly limits before sending
+  const accLimits = await getAccountEffectiveLimits({
+    id: account.id,
+    daily_limit: job.account_daily_limit ?? 50,
+    hourly_limit: job.account_hourly_limit ?? 10,
+  });
+  const [accSentToday, accSentHour] = await Promise.all([
+    jobRepo.sentTodayForAccount(account.id),
+    jobRepo.sentThisHourForAccount(account.id),
+  ]);
+  const actualAccSentToday = Math.max(accSentToday, job.account_sent_today ?? 0);
+  if (actualAccSentToday >= accLimits.daily) {
+    const tomorrow = getTomorrowStart(accLimits.window?.start_time);
+    await jobRepo.reschedule(jobId, tomorrow, "Account daily sending limit reached for today");
+    return;
+  }
+  if (accSentHour >= accLimits.hourly) {
+    const nextHour = new Date(Date.now() + 15 * 60 * 1000);
+    await jobRepo.reschedule(jobId, nextHour, "Account hourly sending limit reached");
+    return;
+  }
+
+  // Double-check Campaign daily and hourly limits before sending
+  const campLimits = await getCampaignEffectiveLimits({
+    id: job.campaign_id,
+    daily_limit: job.campaign_daily_limit,
+    hourly_limit: job.campaign_hourly_limit,
+  });
+  const [campSentToday, campSentHour] = await Promise.all([
+    jobRepo.sentTodayForCampaign(job.campaign_id),
+    jobRepo.sentThisHourForCampaign(job.campaign_id),
+  ]);
+  if (campSentToday >= campLimits.daily) {
+    const tomorrow = getTomorrowStart(campLimits.window?.start_time);
+    await jobRepo.reschedule(jobId, tomorrow, "Campaign daily sending limit reached for today");
+    return;
+  }
+  if (campSentHour >= campLimits.hourly) {
+    const nextHour = new Date(Date.now() + 15 * 60 * 1000);
+    await jobRepo.reschedule(jobId, nextHour, "Campaign hourly sending limit reached");
     return;
   }
 
   try {
-    const senderEmail = EMAIL_RE.test(credentials.username)
-      ? credentials.username
-      : account.email;
     const result = await sendEmail(credentials, {
       from: senderEmail,
-      fromName: displayNameFromEmail(senderEmail),
+      fromName: senderDisplayName,
       replyTo: senderEmail,
       to: job.lead_email,
       subject: rendered.subject,
@@ -369,6 +488,20 @@ async function processDueJobs(): Promise<void> {
       continue;
     }
 
+    const cooldownUntil = accountCooldownUntil.get(accountId) ?? 0;
+    if (Date.now() < cooldownUntil) {
+      continue;
+    }
+
+    if (account.last_sent_at) {
+      const elapsed = Date.now() - new Date(account.last_sent_at).getTime();
+      const { minMs } = getSendDelayRange();
+      if (elapsed < minMs) {
+        accountCooldownUntil.set(accountId, new Date(account.last_sent_at).getTime() + minMs);
+        continue;
+      }
+    }
+
     let credentials: EmailServerCredentials;
     try {
       credentials = accountRepo.deserializeCredentials(account.credentials_reference);
@@ -378,12 +511,35 @@ async function processDueJobs(): Promise<void> {
       continue;
     }
 
+    const limits = await getAccountEffectiveLimits(account);
     const [sentToday, sentThisHour] = await Promise.all([
       jobRepo.sentTodayForAccount(accountId),
       jobRepo.sentThisHourForAccount(accountId),
     ]);
-    const dailyRemaining = account.daily_limit - sentToday;
-    const hourlyRemaining = account.hourly_limit - sentThisHour;
+    const actualSentToday = Math.max(sentToday, account.sent_today);
+    const dailyRemaining = limits.daily - actualSentToday;
+    const hourlyRemaining = limits.hourly - sentThisHour;
+
+    if (dailyRemaining <= 0) {
+      // Account has reached its daily sending limit for today!
+      // Postpone due jobs to tomorrow so no more emails are sent today.
+      const tomorrow = getTomorrowStart(limits.window?.start_time);
+      const dueJobIds = await jobRepo.dueJobIds(accountId, 50);
+      for (const id of dueJobIds) {
+        await jobRepo.reschedule(
+          id,
+          tomorrow,
+          "Account daily sending limit reached for today. Postponed to tomorrow."
+        );
+      }
+      continue;
+    }
+
+    if (hourlyRemaining <= 0) {
+      // Hourly limit reached for this account. Skip until next hour.
+      continue;
+    }
+
     const capacity = Math.min(dailyRemaining, hourlyRemaining, JOBS_PER_ACCOUNT_PER_TICK);
     if (capacity <= 0) continue;
 
@@ -393,6 +549,7 @@ async function processDueJobs(): Promise<void> {
 
     for (const jobId of dueIds) {
       await processJob(jobId, { id: account.id, email: account.email }, credentials);
+      accountCooldownUntil.set(account.id, Date.now() + nextRandomDelayMs());
     }
   }
 }

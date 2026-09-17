@@ -61,14 +61,17 @@ export function renderEmail(
     lead.email
   )}&campaign_id=${campaignId}`;
 
+  const sender = senderName ?? "";
   const values: Record<string, string> = {
     first_name: lead.first_name ?? "",
     last_name: lead.last_name ?? "",
+    name: [lead.first_name, lead.last_name].filter(Boolean).join(" ") || (lead.first_name ?? ""),
     company: lead.company ?? "",
     email: lead.email,
     website: lead.website ?? "",
     phone: lead.phone ?? "",
-    sender_name: senderName ?? "",
+    sender_name: sender,
+    sender: sender,
     unsubscribe_url: unsubscribeUrl,
   };
 
