@@ -35,17 +35,25 @@ const optionalDateTime = z
     return normalized;
   });
 
-const campaignSchema = z.object({
-  name: z.string().trim().min(1).max(255),
-  start_at: optionalDateTime,
-  end_at: optionalDateTime,
-  daily_limit: z.coerce.number().int().min(1).max(100000).optional(),
-  hourly_limit: z.coerce.number().int().min(1).max(1000).optional(),
-  template_id: z.coerce.number().int().positive().nullable().optional(),
-  lead_ids: z.array(z.coerce.number().int().positive()).optional(),
-  lead_list_id: z.coerce.number().int().positive().optional(),
-  account_ids: z.array(z.coerce.number().int().positive()).optional(),
-});
+const campaignSchema = z
+  .object({
+    name: z.string().trim().min(1).max(255),
+    start_at: optionalDateTime,
+    end_at: optionalDateTime,
+    daily_limit: z.coerce.number().int().min(1).max(100000).optional(),
+    hourly_limit: z.coerce.number().int().min(1).max(1000).optional(),
+    template_id: z.coerce.number().int().positive().nullable().optional(),
+    lead_ids: z.array(z.coerce.number().int().positive()).optional(),
+    lead_list_id: z.coerce.number().int().positive().optional(),
+    account_ids: z.array(z.coerce.number().int().positive()).optional(),
+  })
+  .refine(
+    (value) => {
+      if (!value.start_at || !value.end_at) return true;
+      return Date.parse(value.start_at) < Date.parse(value.end_at);
+    },
+    { message: "End schedule must be after start schedule" }
+  );
 
 const campaignUpdateSchema = campaignSchema.optional().refine((value) => value !== undefined, {
   message: "At least one updatable field is required",
@@ -68,6 +76,12 @@ const restartSchema = z
     },
     { message: "End schedule must be after start schedule" }
   );
+
+function ensureFutureEnd(schedule: { end_at?: string | undefined }): void {
+  if (schedule.end_at && Date.parse(schedule.end_at) <= Date.now()) {
+    throw new AppError("Schedule end time must be in the future", 400);
+  }
+}
 
 async function buildSummary(campaign: Campaign): Promise<CampaignSummary> {
   const countsMap = await campaignRepository.statsFor([campaign.id]);
@@ -222,6 +236,11 @@ export const createCampaign = asyncHandler(async (req, res) => {
     await campaignRepository.replaceAccounts(id, accountIds);
   }
 
+  const activeAccountIds = await campaignRepository.campaignActiveAccountIds(id);
+  if (leadIds.length > 0 && activeAccountIds.length > 0) {
+    await campaignRepository.setCampaignStatus(id, "ACTIVE");
+  }
+
   const campaign = await campaignRepository.findById(id, userId);
   res.status(201).json({ data: await buildDetail(campaign!) });
   broadcast(userId, { type: "campaign", id, status: campaign!.status });
@@ -325,6 +344,7 @@ function isUnsentForResend(status: string | null): boolean {
 export const restartCampaign = asyncHandler(async (req, res) => {
   const { id } = paramIdSchema.parse(req.params);
   const input = restartSchema.parse(req.body ?? {});
+  ensureFutureEnd(input);
   const userId = req.user!.userId;
 
   const campaign = await campaignRepository.findById(id, userId);
@@ -395,7 +415,7 @@ export const restartCampaign = asyncHandler(async (req, res) => {
     await jobRepository.insertJobs(rows);
   }
 
-  await campaignRepository.setCampaignStatus(id, "DRAFT");
+  await campaignRepository.setCampaignStatus(id, "ACTIVE");
 
   const updated = await campaignRepository.findById(id, userId);
   res.json({ data: await buildSummary(updated!) });
@@ -404,6 +424,7 @@ export const restartCampaign = asyncHandler(async (req, res) => {
 export const resendUnsentCampaign = asyncHandler(async (req, res) => {
   const { id } = paramIdSchema.parse(req.params);
   const input = restartSchema.parse(req.body ?? {});
+  ensureFutureEnd(input);
   const userId = req.user!.userId;
 
   const campaign = await campaignRepository.findById(id, userId);
@@ -478,7 +499,7 @@ export const resendUnsentCampaign = asyncHandler(async (req, res) => {
     await jobRepository.insertJobs(rows);
   }
 
-  await campaignRepository.setCampaignStatus(id, "DRAFT");
+  await campaignRepository.setCampaignStatus(id, "ACTIVE");
 
   const updated = await campaignRepository.findById(id, userId);
   res.json({ data: await buildSummary(updated!), rescheduled: rows.length });

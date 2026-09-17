@@ -91,6 +91,14 @@ function toInputValue(value: string | null): string {
   return `${value.replace(" ", "T")}`.slice(0, 16);
 }
 
+function datetimeLocalNow(): string {
+  const date = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}`;
+}
+
 export function CampaignFormDialog({
   open,
   onOpenChange,
@@ -100,7 +108,7 @@ export function CampaignFormDialog({
   const draft = loadDraft();
   const [name, setName] = useState(campaign?.name ?? draft?.name ?? "");
   const [startAt, setStartAt] = useState(
-    campaign ? toInputValue(campaign.start_at ?? null) : (draft?.startAt ?? "")
+    campaign ? toInputValue(campaign.start_at ?? null) : (draft?.startAt ?? datetimeLocalNow())
   );
   const [endAt, setEndAt] = useState(
     campaign ? toInputValue(campaign.end_at ?? null) : (draft?.endAt ?? "")
@@ -236,6 +244,11 @@ export function CampaignFormDialog({
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+
+    if (startAt.trim() && endAt.trim() && new Date(endAt) <= new Date(startAt)) {
+      setError("Schedule end must be after the start time");
+      return;
+    }
 
     if (!selectedLeadListId && !campaign) {
       setError("Select a lead list before saving the campaign");
@@ -400,6 +413,10 @@ export function CampaignFormDialog({
                 value={startAt}
                 onChange={(e) => setStartAt(e.target.value)}
               />
+              <p className="text-xs text-muted-foreground">
+                Campaign starts sending automatically once this time is reached. Leave empty to
+                begin immediately.
+              </p>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="campaign-end">Schedule end</Label>

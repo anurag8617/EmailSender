@@ -20,10 +20,13 @@ export class SendError extends Error {
 
 export interface SendOptions {
   from: string;
+  fromName?: string;
+  replyTo?: string;
   to: string;
   subject: string;
   text: string;
   html?: string;
+  unsubscribeUrl?: string;
 }
 
 export interface SendResult {
@@ -31,6 +34,19 @@ export interface SendResult {
 }
 
 const TIMEOUT_MS = 20_000;
+
+function listUnsubscribeSafe(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
+    const host = parsed.hostname.toLowerCase();
+    if (host === "localhost" || host.endsWith(".localhost")) return false;
+    if (host === "127.0.0.1" || host === "::1") return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function classify(error: { message?: string; code?: string; responseCode?: number }): FailureKind {
   const message = (error.message ?? "").toLowerCase();
@@ -88,12 +104,21 @@ export async function sendEmail(
   });
 
   try {
+    const headers: Record<string, string> =
+      options.unsubscribeUrl && listUnsubscribeSafe(options.unsubscribeUrl)
+        ? {
+            "List-Unsubscribe": `<${options.unsubscribeUrl}>`,
+            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+          }
+        : {};
     const info = await transporter.sendMail({
-      from: `"${credentials.username}" <${options.from}>`,
+      from: options.fromName ? `"${options.fromName}" <${options.from}>` : options.from,
+      replyTo: options.replyTo ?? options.from,
       to: options.to,
       subject: options.subject,
       text: options.text,
       html: options.html,
+      headers,
     });
     return { messageId: info.messageId ?? `${Date.now()}` };
   } catch (error) {

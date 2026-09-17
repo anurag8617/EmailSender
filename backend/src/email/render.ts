@@ -32,6 +32,25 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+function stripUnsubscribeLines(value: string): string {
+  return value
+    .split("\n")
+    .filter((line) => !/\{\{\s*unsubscribe_url\s*\}\}/i.test(line))
+    .join("\n");
+}
+
+function textToHtml(text: string): string {
+  return text
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map(
+      (paragraph) =>
+        `<p style="margin: 0 0 16px;">${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`
+    )
+    .join("");
+}
+
 export function renderEmail(
   template: RenderTemplateSource,
   lead: RenderLead,
@@ -61,15 +80,15 @@ export function renderEmail(
   }
 
   const subject = replaceVariables(template.subject, values).trim();
-  const body = replaceVariables(template.body, values).trim();
-  const footer = template.footer ? replaceVariables(template.footer, values).trim() : "";
+  const body = replaceVariables(stripUnsubscribeLines(template.body), values).trim();
+  const footer = template.footer
+    ? replaceVariables(stripUnsubscribeLines(template.footer), values).trim()
+    : "";
 
   const text = [body, footer].filter(Boolean).join("\n\n");
-  const html = text
-    .split("\n")
-    .map((line) => escapeHtml(line))
-    .join("<br>");
-  const htmlBody = `<div style="font-family: Arial, Helvetica, sans-serif; color: #1f2937; line-height: 1.5;">${html}</div>`;
+  const htmlBody = `<div style="font-family: Arial, Helvetica, sans-serif; color: #1f2937; line-height: 1.5;">${textToHtml(
+    text
+  )}</div>`;
 
   return { subject, text, html: htmlBody, unsubscribeUrl };
 }

@@ -69,7 +69,7 @@ export function CampaignRestartDialog({
         ? parts.join(" · ")
         : "no schedule window — sending as soon as possible";
       onOpenChange(false);
-      onRestarted(`Campaign "${campaign.name}" restarted — ${when}. Press Start when ready.`);
+      onRestarted(`Campaign "${campaign.name}" restarted — ${when}. Sending starts automatically.`);
     } else {
       setError(result.error ?? "Failed to restart campaign");
     }

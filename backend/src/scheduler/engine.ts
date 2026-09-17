@@ -37,6 +37,14 @@ function pickAccount(accountIds: number[], usage: Map<number, number>): number {
   return best;
 }
 
+function displayNameFromEmail(email: string): string {
+  return email
+    .split("@")[0]
+    .split(/[._-]+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 interface WindowState {
   within: boolean;
   ended: boolean;
@@ -178,7 +186,7 @@ async function processJob(
     if (job.campaign_status === "PAUSED") {
       await jobRepo.requeue(jobId, new Date(Date.now() + retryDelayMs(job.attempts)), "campaign paused");
     } else {
-      await jobRepo.cancel(jobId);
+      await jobRepo.cancel(jobId, "campaign is no longer active");
     }
     return;
   }
@@ -272,7 +280,7 @@ async function processJob(
     end_at: job.campaign_end_at,
   });
   if (windowState.ended) {
-    await jobRepo.cancel(jobId);
+    await jobRepo.cancel(jobId, "campaign sending window ended before this email was sent");
     return;
   }
   if (!windowState.within) {
@@ -297,12 +305,18 @@ async function processJob(
   }
 
   try {
+    const senderEmail = EMAIL_RE.test(credentials.username)
+      ? credentials.username
+      : account.email;
     const result = await sendEmail(credentials, {
-      from: account.email,
+      from: senderEmail,
+      fromName: displayNameFromEmail(senderEmail),
+      replyTo: senderEmail,
       to: job.lead_email,
       subject: rendered.subject,
       text: rendered.text,
       html: rendered.html,
+      unsubscribeUrl: rendered.unsubscribeUrl,
     });
     await jobRepo.markSent(jobId, result.messageId);
     await jobRepo.incrementAccountSentToday(account.id);
@@ -399,7 +413,7 @@ async function finalizeCampaigns(): Promise<void> {
         campaign.id,
         "campaign sending window ended before this lead was scheduled"
       );
-      await jobRepo.canceledPending(campaign.id);
+      await jobRepo.canceledPending(campaign.id, "campaign sending window ended");
       await campaignRepo.setCampaignStatus(campaign.id, "COMPLETED");
       broadcast(campaign.user_id, {
         type: "campaign",

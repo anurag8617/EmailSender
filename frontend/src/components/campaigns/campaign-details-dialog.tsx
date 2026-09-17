@@ -66,6 +66,20 @@ function recipientStatusLabel(status: string | null): string {
   return RECIPIENT_STATUS_LABEL[status] ?? status;
 }
 
+function recipientReason(lead: { job_status: string | null; error_message: string | null }): string {
+  if (lead.error_message) return lead.error_message;
+  switch (lead.job_status) {
+    case "CANCELLED":
+      return "Campaign window closed";
+    case "SKIPPED":
+      return "Skipped";
+    case "FAILED":
+      return "Failed to send";
+    default:
+      return "—";
+  }
+}
+
 function formatDateTime(value: string | null): string {
   if (!value) return "—";
   return new Date(value).toLocaleString();
@@ -294,11 +308,12 @@ export function CampaignDetailsDialog({
                         <TableHead>Company</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead>Reason</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {detail.leads.map((lead) => (
-                        <TableRow key={lead.id}>
+                        <TableRow key={`${lead.id}:${lead.job_id ?? "none"}`}>
                           <TableCell className="font-medium">
                             {[lead.first_name, lead.last_name].filter(Boolean).join(" ") || "—"}
                           </TableCell>
@@ -314,6 +329,19 @@ export function CampaignDetailsDialog({
                             >
                               {recipientStatusLabel(lead.job_status)}
                             </Badge>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {(["SENT", "PENDING", "PROCESSING"].includes(lead.job_status ?? "") ||
+                            !lead.job_status) ? (
+                              <span>—</span>
+                            ) : (
+                              <span
+                                title={recipientReason(lead)}
+                                className="block max-w-64 truncate text-muted-foreground"
+                              >
+                                {recipientReason(lead)}
+                              </span>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}

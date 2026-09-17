@@ -162,10 +162,10 @@ export async function requeue(jobId: number, scheduledAt: Date, error?: string):
   );
 }
 
-export async function cancel(jobId: number): Promise<void> {
+export async function cancel(jobId: number, reason?: string): Promise<void> {
   await pool.query<ResultSetHeader>(
-    `UPDATE email_jobs SET status = 'CANCELLED', updated_at = NOW() WHERE id = ?`,
-    [jobId]
+    `UPDATE email_jobs SET status = 'CANCELLED', error_message = ?, updated_at = NOW() WHERE id = ?`,
+    [reason ?? null, jobId]
   );
 }
 
@@ -251,11 +251,11 @@ export async function unfinishedJobCount(campaignId: number): Promise<number> {
   return Number(rows[0]?.count ?? 0);
 }
 
-export async function canceledPending(campaignId: number): Promise<number> {
+export async function canceledPending(campaignId: number, reason?: string): Promise<number> {
   const [result] = await pool.query<ResultSetHeader>(
-    `UPDATE email_jobs SET status = 'CANCELLED', updated_at = NOW()
+    `UPDATE email_jobs SET status = 'CANCELLED', error_message = ?, updated_at = NOW()
       WHERE campaign_id = ? AND status IN ('PENDING', 'PROCESSING')`,
-    [campaignId]
+    [reason ?? null, campaignId]
   );
   return result.affectedRows;
 }
@@ -313,7 +313,7 @@ export async function recordUnsubscribe(campaignId: number, email: string): Prom
   await pool.query<ResultSetHeader>(
     `UPDATE email_jobs ej
        JOIN leads l ON l.id = ej.lead_id
-        SET ej.status = 'CANCELLED', ej.updated_at = NOW()
+        SET ej.status = 'CANCELLED', ej.error_message = 'recipient unsubscribed', ej.updated_at = NOW()
       WHERE ej.campaign_id = ? AND l.email = ? AND ej.status IN ('PENDING', 'PROCESSING')`,
     [campaignId, email]
   );

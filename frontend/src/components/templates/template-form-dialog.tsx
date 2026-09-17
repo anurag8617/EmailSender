@@ -41,18 +41,16 @@ const SUPPORTED = [
   "website",
   "phone",
   "sender_name",
-  "unsubscribe_url",
 ];
 
-const DEFAULT_FOOTER =
-  "Best regards,\n{{sender_name}}\n{{company}}\n\nUnsubscribe: {{unsubscribe_url}}";
+const DEFAULT_FOOTER = "Best regards,\n{{sender_name}}\n{{company}}";
 
 export function TemplateFormDialog({
   open,
   onOpenChange,
   template,
   onSaved,
-}: TemplateFormDialogProps) {
+}: TemplateFormDialogProps) {                                                               
   const [form, setForm] = useState<FormState>(() => ({
     name: template?.name ?? "",
     subject: template?.subject ?? "",
@@ -183,8 +181,8 @@ export function TemplateFormDialog({
             <div className="grid gap-2">
               <Label htmlFor="template-footer">Footer (optional)</Label>
               <p className="mb-2 text-xs text-muted-foreground">
-                Appended to every email from this template. {`{{unsubscribe_url}}`}, {"{{sender_name}}"} and
-                other variables work here.
+                Appended to every email from this template. {`{{sender_name}}`} and other variables
+                work here.
               </p>
               <Textarea
                 id="template-footer"
